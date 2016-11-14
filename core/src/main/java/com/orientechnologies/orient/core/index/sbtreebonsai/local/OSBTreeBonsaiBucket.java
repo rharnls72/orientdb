@@ -27,6 +27,8 @@ import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.exception.OSBTreeBonsaiLocalException;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OVarLinkSerializer;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
 
@@ -38,41 +40,51 @@ import java.util.Map;
 
 /**
  * @author Andrey Lomakin
+ * @author Sergey Sitnikov – version, new link serializer and ID support
  * @since 8/7/13
  */
 public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
-  public static final int   MAX_BUCKET_SIZE_BYTES    = OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getValueAsInteger() * 1024;
-  /**
-   * Maximum size of key-value pair which can be put in SBTreeBonsai in bytes (24576000 by default)
-   */
-  private static final byte LEAF                     = 0x1;
-  private static final byte DELETED                  = 0x2;
-  private static final int  MAX_ENTREE_SIZE          = 24576000;
-  private static final int  FREE_POINTER_OFFSET      = WAL_POSITION_OFFSET + OLongSerializer.LONG_SIZE;
-  private static final int  SIZE_OFFSET              = FREE_POINTER_OFFSET + OIntegerSerializer.INT_SIZE;
-  private static final int  FLAGS_OFFSET             = SIZE_OFFSET + OIntegerSerializer.INT_SIZE;
-  private static final int  FREE_LIST_POINTER_OFFSET = FLAGS_OFFSET + OByteSerializer.BYTE_SIZE;
-  private static final int  LEFT_SIBLING_OFFSET      = FREE_LIST_POINTER_OFFSET + OBonsaiBucketPointer.SIZE;
-  private static final int  RIGHT_SIBLING_OFFSET     = LEFT_SIBLING_OFFSET + OBonsaiBucketPointer.SIZE;
-  private static final int  TREE_SIZE_OFFSET         = RIGHT_SIBLING_OFFSET + OBonsaiBucketPointer.SIZE;
-  private static final int  KEY_SERIALIZER_OFFSET    = TREE_SIZE_OFFSET + OLongSerializer.LONG_SIZE;
-  private static final int  VALUE_SERIALIZER_OFFSET  = KEY_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
-  private static final int            POSITIONS_ARRAY_OFFSET   = VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
-  private final boolean               isLeaf;
-  private final int                   offset;
+  public static final int MAX_BUCKET_SIZE_BYTES = OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getValueAsInteger() * 1024;
 
-  private final OBinarySerializer<K>  keySerializer;
-  private final OBinarySerializer<V>  valueSerializer;
+  private static final byte VERSION_1 = 0;
+  private static final byte VERSION_2 = 1;
 
-  private final Comparator<? super K> comparator               = ODefaultComparator.INSTANCE;
+  private static final byte LEAF_MASK     = 0x01; // 0b0000_0001
+  private static final byte DELETED_MASK  = 0x02; // 0b0000_0010
+  private static final byte VERSION_MASK  = 0x3C; // 0b0011_1100
+  private static final int  VERSION_SHIFT = 2;
+
+  private static final int FREE_POINTER_OFFSET      = WAL_POSITION_OFFSET + OLongSerializer.LONG_SIZE;
+  private static final int SIZE_OFFSET              = FREE_POINTER_OFFSET + OIntegerSerializer.INT_SIZE;
+  private static final int FLAGS_OFFSET             = SIZE_OFFSET + OIntegerSerializer.INT_SIZE;
+  private static final int FREE_LIST_POINTER_OFFSET = FLAGS_OFFSET + OByteSerializer.BYTE_SIZE;
+  private static final int LEFT_SIBLING_OFFSET      = FREE_LIST_POINTER_OFFSET + OBonsaiBucketPointer.SIZE;
+  private static final int RIGHT_SIBLING_OFFSET     = LEFT_SIBLING_OFFSET + OBonsaiBucketPointer.SIZE;
+  private static final int TREE_SIZE_OFFSET         = RIGHT_SIBLING_OFFSET + OBonsaiBucketPointer.SIZE;
+  private static final int KEY_SERIALIZER_OFFSET    = TREE_SIZE_OFFSET + OLongSerializer.LONG_SIZE;
+  private static final int VALUE_SERIALIZER_OFFSET  = KEY_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
+
+  private final int ID_OFFSET;
+  private final int POSITIONS_ARRAY_OFFSET;
+
+  private static final int MAX_ENTREE_SIZE = 24576000;
+
+  private final boolean isLeaf;
+  private final byte    version;
+  private final int     offset;
+
+  private final OBinarySerializer<K> keySerializer;
+  private final OBinarySerializer<V> valueSerializer;
+
+  private final Comparator<? super K> comparator = ODefaultComparator.INSTANCE;
 
   private final OSBTreeBonsaiLocal<K, V> tree;
 
   public static final class SBTreeEntry<K, V> implements Map.Entry<K, V>, Comparable<SBTreeEntry<K, V>> {
-    public final OBonsaiBucketPointer   leftChild;
-    public final OBonsaiBucketPointer   rightChild;
-    public final K                      key;
-    public final V                      value;
+    public final OBonsaiBucketPointer leftChild;
+    public final OBonsaiBucketPointer rightChild;
+    public final K                    key;
+    public final V                    value;
     private final Comparator<? super K> comparator = ODefaultComparator.INSTANCE;
 
     public SBTreeEntry(OBonsaiBucketPointer leftChild, OBonsaiBucketPointer rightChild, K key, V value) {
@@ -132,6 +144,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
       return "SBTreeEntry{" + "leftChild=" + leftChild + ", rightChild=" + rightChild + ", key=" + key + ", value=" + value + '}';
     }
 
+    @SuppressWarnings("NullableProblems")
     @Override
     public int compareTo(SBTreeEntry<K, V> other) {
       return comparator.compare(key, other.key);
@@ -144,21 +157,27 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
     this.offset = pageOffset;
     this.isLeaf = isLeaf;
-    this.keySerializer = keySerializer;
-    this.valueSerializer = valueSerializer;
+    this.version = VERSION_2;
 
     setIntValue(offset + FREE_POINTER_OFFSET, MAX_BUCKET_SIZE_BYTES);
     setIntValue(offset + SIZE_OFFSET, 0);
 
     //THIS REMOVE ALSO THE EVENTUAL DELETED FLAG
-    setByteValue(offset + FLAGS_OFFSET, (byte) (isLeaf ? LEAF : 0));
+    setByteValue(offset + FLAGS_OFFSET, encodeVersion(encodeFlag((byte) 0, LEAF_MASK, isLeaf), version));
     setLongValue(offset + LEFT_SIBLING_OFFSET, -1);
     setLongValue(offset + RIGHT_SIBLING_OFFSET, -1);
 
     setLongValue(offset + TREE_SIZE_OFFSET, 0);
 
-    setByteValue(offset + KEY_SERIALIZER_OFFSET, keySerializer.getId());
-    setByteValue(offset + VALUE_SERIALIZER_OFFSET, valueSerializer.getId());
+    setKeySerializerId(keySerializer.getId());
+    setValueSerializerId(valueSerializer.getId());
+
+    this.keySerializer = upgradeSerializer(keySerializer, version);
+    this.valueSerializer = valueSerializer;
+
+    ID_OFFSET = VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
+    POSITIONS_ARRAY_OFFSET = ID_OFFSET + OLongSerializer.LONG_SIZE;
+
     this.tree = tree;
   }
 
@@ -167,10 +186,18 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     super(cacheEntry, changes);
 
     this.offset = pageOffset;
-    this.isLeaf = (getByteValue(offset + FLAGS_OFFSET) & LEAF) == LEAF;
-    this.keySerializer = keySerializer;
+
+    final byte flags = getByteValue(offset + FLAGS_OFFSET);
+    this.isLeaf = decodeFlag(flags, LEAF_MASK);
+    this.version = decodeVersion(flags);
+
+    this.keySerializer = upgradeSerializer(keySerializer, version);
     this.valueSerializer = valueSerializer;
     this.tree = tree;
+
+    ID_OFFSET = version == VERSION_1 ? -1 : VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
+    POSITIONS_ARRAY_OFFSET =
+        version == VERSION_1 ? VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE : ID_OFFSET + OLongSerializer.LONG_SIZE;
   }
 
   public byte getKeySerializerId() {
@@ -233,8 +260,9 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
     int size = size();
     if (entryIndex < size - 1) {
-      moveData(offset + POSITIONS_ARRAY_OFFSET + (entryIndex + 1) * OIntegerSerializer.INT_SIZE, offset + POSITIONS_ARRAY_OFFSET
-          + entryIndex * OIntegerSerializer.INT_SIZE, (size - entryIndex - 1) * OIntegerSerializer.INT_SIZE);
+      moveData(offset + POSITIONS_ARRAY_OFFSET + (entryIndex + 1) * OIntegerSerializer.INT_SIZE,
+          offset + POSITIONS_ARRAY_OFFSET + entryIndex * OIntegerSerializer.INT_SIZE,
+          (size - entryIndex - 1) * OIntegerSerializer.INT_SIZE);
     }
 
     size--;
@@ -339,15 +367,16 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
       if (size > 1)
         return false;
       else
-        throw new OSBTreeBonsaiLocalException("Entry size ('key + value') is more than is more than allowed "
-            + (freePointer - 2 * OIntegerSerializer.INT_SIZE + POSITIONS_ARRAY_OFFSET)
-            + " bytes, either increase page size using '" + OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getKey()
-            + "' parameter, or decrease 'key + value' size.", tree);
+        throw new OSBTreeBonsaiLocalException(
+            "Entry size ('key + value') is more than is more than allowed " + (freePointer - 2 * OIntegerSerializer.INT_SIZE
+                + POSITIONS_ARRAY_OFFSET) + " bytes, either increase page size using '"
+                + OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getKey() + "' parameter, or decrease 'key + value' size.", tree);
     }
 
     if (index <= size - 1) {
-      moveData(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE, offset + POSITIONS_ARRAY_OFFSET + (index + 1)
-          * OIntegerSerializer.INT_SIZE, (size - index) * OIntegerSerializer.INT_SIZE);
+      moveData(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE,
+          offset + POSITIONS_ARRAY_OFFSET + (index + 1) * OIntegerSerializer.INT_SIZE,
+          (size - index) * OIntegerSerializer.INT_SIZE);
     }
 
     freePointer -= entrySize;
@@ -426,19 +455,14 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     setBucketPointer(offset + FREE_LIST_POINTER_OFFSET, pointer);
   }
 
-  public void setDelted(boolean deleted) {
-    byte value = getByteValue(offset + FLAGS_OFFSET);
-    if(deleted)
-      setByteValue(offset + FLAGS_OFFSET, (byte) (value | DELETED));
-    else
-      //REMOVE THE FLAG the &(and) ~(not) is the opreation to remove flags in bits
-      setByteValue(offset + FLAGS_OFFSET, (byte) (value & (~DELETED)));
+  public void setDeleted(boolean deleted) {
+    final byte flags = getByteValue(offset + FLAGS_OFFSET);
+    setByteValue(offset + FLAGS_OFFSET, encodeFlag(flags, DELETED_MASK, deleted));
   }
 
   public boolean isDeleted() {
-    return (getByteValue(offset + FLAGS_OFFSET) & DELETED) == DELETED;
+    return decodeFlag(getByteValue(offset + FLAGS_OFFSET), DELETED_MASK);
   }
-
 
   public OBonsaiBucketPointer getLeftSibling() {
     return getBucketPointer(offset + LEFT_SIBLING_OFFSET);
@@ -456,9 +480,52 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     setBucketPointer(offset + RIGHT_SIBLING_OFFSET, pointer);
   }
 
+  public long getId() {
+    assert version >= VERSION_2;
+    return getLongValue(offset + ID_OFFSET);
+  }
+
+  public void setId(long value) throws IOException {
+    assert version >= VERSION_2;
+    setLongValue(offset + ID_OFFSET, value);
+  }
+
   private void checkEntreeSize(int entreeSize) {
     if (entreeSize > MAX_ENTREE_SIZE)
-      throw new OSBTreeBonsaiLocalException("Serialized key-value pair size bigger than allowed " + entreeSize + " vs "
-          + MAX_ENTREE_SIZE + ".", tree);
+      throw new OSBTreeBonsaiLocalException(
+          "Serialized key-value pair size bigger than allowed " + entreeSize + " vs " + MAX_ENTREE_SIZE + ".", tree);
   }
+
+  @SuppressWarnings("unchecked")
+  private static <T> OBinarySerializer<T> upgradeSerializer(OBinarySerializer<T> serializer, byte version) {
+    if (serializer == null)
+      return null;
+
+    switch (version) {
+    case VERSION_1:
+      return serializer;
+    case VERSION_2:
+      return serializer.getId() == OLinkSerializer.ID ? (OBinarySerializer<T>) OVarLinkSerializer.INSTANCE : serializer;
+    default:
+      throw new IllegalStateException("unexpected Bonsai bucket version");
+    }
+  }
+
+  private static byte decodeVersion(byte flags) {
+    return (byte) ((flags & VERSION_MASK) >>> VERSION_SHIFT);
+  }
+
+  private static byte encodeVersion(byte flags, byte version) {
+    assert version < 16;
+    return (byte) ((version << VERSION_SHIFT & VERSION_MASK) | (flags & ~VERSION_MASK));
+  }
+
+  private static boolean decodeFlag(byte flags, byte mask) {
+    return (flags & mask) != 0;
+  }
+
+  private static byte encodeFlag(byte flags, byte mask, boolean value) {
+    return value ? (byte) (flags | mask) : (byte) (flags & ~mask);
+  }
+
 }

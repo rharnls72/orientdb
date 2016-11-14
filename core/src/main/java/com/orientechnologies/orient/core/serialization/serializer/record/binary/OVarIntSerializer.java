@@ -20,6 +20,7 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.record.binary;
 
+import com.orientechnologies.common.types.OModifiableInteger;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
 
 import java.nio.ByteBuffer;
@@ -197,16 +198,17 @@ public class OVarIntSerializer {
    *
    * @return the size in bytes
    */
-  public static int sizeOfSerializedValue(ByteBuffer buffer, OWALChanges walChanges, int position) {
+  public static int sizeOfSerializedValue(ByteBuffer buffer, OWALChanges walChanges, OModifiableInteger position) {
     int size = 1;
+    int p = position.intValue();
 
-    while (walChanges.getByteValue(buffer, position++) < 0)
+    while (walChanges.getByteValue(buffer, p++) < 0)
       ++size;
 
     if (size > 10)
       throw new IllegalStateException("Variable length quantity size is too long (must be <= 10)");
 
-    buffer.position(position);
+    position.setValue(p);
     return size;
   }
 
@@ -241,19 +243,20 @@ public class OVarIntSerializer {
    *
    * @return the deserialized value
    */
-  public static long readUnsignedLong(ByteBuffer buffer, OWALChanges walChanges, int position) {
+  public static long readUnsignedLong(ByteBuffer buffer, OWALChanges walChanges, OModifiableInteger position) {
     long value = 0L;
     int i = 0;
     long b;
+    int p = position.intValue();
 
-    while (((b = walChanges.getByteValue(buffer, position++)) & 0x80L) != 0) {
+    while (((b = walChanges.getByteValue(buffer, p++)) & 0x80L) != 0) {
       value |= (b & 0x7F) << i;
       i += 7;
       if (i > 63)
         throw new IllegalStateException("Variable length quantity is too long (must be <= 63)");
     }
 
-    buffer.position(position);
+    position.setValue(p);
     return value | (b << i);
   }
 
@@ -277,7 +280,7 @@ public class OVarIntSerializer {
    *
    * @return the deserialized value
    */
-  public static int readUnsignedInteger(ByteBuffer buffer, OWALChanges walChanges, int position) {
+  public static int readUnsignedInteger(ByteBuffer buffer, OWALChanges walChanges, OModifiableInteger position) {
     return (int) readUnsignedLong(buffer, walChanges, position);
   }
 }

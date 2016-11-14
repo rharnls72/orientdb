@@ -401,7 +401,7 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
         addChildrenToQueue(subTreesToDelete, bucket);
 
         bucket.setFreeListPointer(head);
-        bucket.setDelted(true);
+        bucket.setDeleted(true);
         head = bucketPointer;
       } finally {
         cacheEntry.releaseExclusiveLock();

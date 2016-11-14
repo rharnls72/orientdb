@@ -21,6 +21,7 @@
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
 import com.orientechnologies.common.serialization.types.OBinarySerializer;
+import com.orientechnologies.common.types.OModifiableInteger;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -120,13 +121,15 @@ public class OVarLinkSerializer implements OBinarySerializer<OIdentifiable> {
 
   @Override
   public ORecordId deserializeFromByteBufferObject(ByteBuffer buffer, OWALChanges walChanges, int offset) {
-    return new ORecordId(OVarIntSerializer.readUnsignedInteger(buffer, walChanges, offset),
-        OVarIntSerializer.readUnsignedLong(buffer, walChanges, buffer.position()));
+    final OModifiableInteger position = new OModifiableInteger(offset);
+    return new ORecordId(OVarIntSerializer.readUnsignedInteger(buffer, walChanges, position),
+        OVarIntSerializer.readUnsignedLong(buffer, walChanges, position));
   }
 
   @Override
   public int getObjectSizeInByteBuffer(ByteBuffer buffer, OWALChanges walChanges, int offset) {
-    return OVarIntSerializer.sizeOfSerializedValue(buffer, walChanges, offset) + OVarIntSerializer
-        .sizeOfSerializedValue(buffer, walChanges, buffer.position());
+    final OModifiableInteger position = new OModifiableInteger(offset);
+    return OVarIntSerializer.sizeOfSerializedValue(buffer, walChanges, position) + OVarIntSerializer
+        .sizeOfSerializedValue(buffer, walChanges, position);
   }
 }
