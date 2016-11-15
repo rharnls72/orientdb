@@ -40,7 +40,7 @@ import java.util.Map;
 
 /**
  * @author Andrey Lomakin
- * @author Sergey Sitnikov – version, new link serializer and ID support
+ * @author Sergey Sitnikov – version, variable-sized serializers and ID support
  * @since 8/7/13
  */
 public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
@@ -173,7 +173,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     setValueSerializerId(valueSerializer.getId());
 
     this.keySerializer = upgradeSerializer(keySerializer, version);
-    this.valueSerializer = valueSerializer;
+    this.valueSerializer = upgradeSerializer(valueSerializer, version);
 
     ID_OFFSET = VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
     POSITIONS_ARRAY_OFFSET = ID_OFFSET + OLongSerializer.LONG_SIZE;
@@ -192,7 +192,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     this.version = decodeVersion(flags);
 
     this.keySerializer = upgradeSerializer(keySerializer, version);
-    this.valueSerializer = valueSerializer;
+    this.valueSerializer = upgradeSerializer(valueSerializer, version);
     this.tree = tree;
 
     ID_OFFSET = version == VERSION_1 ? -1 : VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
@@ -480,14 +480,21 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     setBucketPointer(offset + RIGHT_SIBLING_OFFSET, pointer);
   }
 
-  public long getId() {
-    assert version >= VERSION_2;
-    return getLongValue(offset + ID_OFFSET);
+  /**
+   * @return the identifier associated with this bucket, has a meaning only for the root bucket
+   */
+  public long getIdentifier() {
+    return version >= VERSION_2 ? getLongValue(offset + ID_OFFSET) : 0;
   }
 
-  public void setId(long value) throws IOException {
-    assert version >= VERSION_2;
-    setLongValue(offset + ID_OFFSET, value);
+  /**
+   * Sets the identifier associated with this bucket, has a meaning only for the root bucket.
+   *
+   * @param value the new identifier value
+   */
+  public void setIdentifier(long value) throws IOException {
+    if (version >= VERSION_2)
+      setLongValue(offset + ID_OFFSET, value);
   }
 
   private void checkEntreeSize(int entreeSize) {

@@ -20,7 +20,7 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.binary.impl;
 
-import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSupport;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -58,34 +58,34 @@ public class VarIntSerializerTest {
       final int expectedValue = vector.getKey();
       final byte[] expectedBytes = vector.getValue();
 
-      final int actualLength = OVarIntSerializer.sizeOfUnsigned(expectedValue);
+      final int actualLength = OVarIntSupport.sizeOfUnsigned(expectedValue);
       final byte[] actualBytes = new byte[actualLength];
       final ByteBuffer actualBytesBuffer = ByteBuffer.wrap(actualBytes);
-      OVarIntSerializer.writeUnsigned(expectedValue, actualBytesBuffer);
+      OVarIntSupport.writeUnsigned(expectedValue, actualBytesBuffer);
       assertArrayEquals(Integer.toString(expectedValue), expectedBytes, actualBytes);
       assertEquals(expectedBytes.length, actualBytesBuffer.position());
 
       actualBytesBuffer.position(0);
-      final int actualValue = OVarIntSerializer.readUnsignedInteger(actualBytesBuffer);
+      final int actualValue = OVarIntSupport.readUnsignedInteger(actualBytesBuffer);
       assertEquals(expectedValue, actualValue);
       assertEquals(expectedBytes.length, actualBytesBuffer.position());
 
       actualBytesBuffer.position(0);
       assertEquals(Integer.toString(expectedValue), expectedBytes.length,
-          OVarIntSerializer.sizeOfSerializedValue(actualBytesBuffer));
+          OVarIntSupport.sizeOfSerializedValue(actualBytesBuffer));
       assertEquals(expectedBytes.length, actualBytesBuffer.position());
     }
   }
 
   @Test(expected = IllegalStateException.class)
   public void testSizeOfInvalidInput() {
-    OVarIntSerializer
+    OVarIntSupport
         .sizeOfSerializedValue(ByteBuffer.wrap(bytes(0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00)));
   }
 
   @Test(expected = IllegalStateException.class)
   public void testReadInvalidInput() {
-    OVarIntSerializer.readUnsignedLong(ByteBuffer.wrap(bytes(0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00)));
+    OVarIntSupport.readUnsignedLong(ByteBuffer.wrap(bytes(0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00)));
   }
 
   private static byte[] bytes(int... bytes) {

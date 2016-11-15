@@ -20,15 +20,15 @@
 
 package com.orientechnologies.orient.core.index.sbtreebonsai.local;
 
-import java.util.Collection;
-import java.util.Map;
-
 import com.orientechnologies.common.serialization.types.OBinarySerializer;
 import com.orientechnologies.orient.core.db.record.ridbag.sbtree.OBonsaiCollectionPointer;
 import com.orientechnologies.orient.core.db.record.ridbag.sbtree.OSBTreeRidBag;
-import com.orientechnologies.orient.core.storage.cache.OReadCache;
 import com.orientechnologies.orient.core.index.sbtree.OTreeInternal;
 import com.orientechnologies.orient.core.index.sbtree.local.OSBTree;
+import com.orientechnologies.orient.core.storage.cache.OReadCache;
+
+import java.util.Collection;
+import java.util.Map;
 
 /**
  * The tree that have similar structure to {@link OSBTree} and designed to store small entries. <br>
@@ -45,14 +45,14 @@ import com.orientechnologies.orient.core.index.sbtree.local.OSBTree;
  * |+---------------+ +---------------+ +---------------+ +---------------+ +---------------+   |<br>
  * +--------------------------------------------------------------------------------------------+<br>
  * </code>
- * 
+ *
  * @author Artem Orobets (enisher-at-gmail.com)
  * @since 1.7rc1
  */
 public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
   /**
    * Gets id of file where this bonsai tree is stored.
-   * 
+   *
    * @return id of file in {@link OReadCache}
    */
   long getFileId();
@@ -69,7 +69,7 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
 
   /**
    * Search for entry with specific key and return its value.
-   * 
+   *
    * @param key
    * @return value associated with given key, NULL if no value is associated.
    */
@@ -111,7 +111,7 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
    * Hardcoded method for Bag to avoid creation of extra layer.
    * <p/>
    * Don't make any changes to tree.
-   * 
+   *
    * @param changes
    *          Bag changes
    * @return real bag size
@@ -121,4 +121,16 @@ public interface OSBTreeBonsai<K, V> extends OTreeInternal<K, V> {
   OBinarySerializer<K> getKeySerializer();
 
   OBinarySerializer<V> getValueSerializer();
+
+  /**
+   * @return the identifier associated with this tree.
+   */
+  long getIdentifier();
+
+  /**
+   * Sets the identifier associated with this tree.
+   *
+   * @param value the new identifier value.
+   */
+  void setIdentifier(long value);
 }

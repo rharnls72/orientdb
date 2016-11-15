@@ -289,6 +289,16 @@ public class OSBTreeBonsaiRemote<K, V> implements OSBTreeBonsai<K, V> {
     return valueSerializer;
   }
 
+  @Override
+  public long getIdentifier() {
+    throw new UnsupportedOperationException("unimplemented yet"); // todo: implement
+  }
+
+  @Override
+  public void setIdentifier(long value) {
+    throw new UnsupportedOperationException("unimplemented yet"); // todo: implement
+  }
+
   class TreeEntry<EK, EV> implements Map.Entry<EK, EV> {
     private final EK key;
     private final EV value;

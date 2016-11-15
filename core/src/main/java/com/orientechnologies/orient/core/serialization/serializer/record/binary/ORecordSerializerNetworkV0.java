@@ -83,7 +83,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     int unmarshalledFields = 0;
 
     while (true) {
-      final int len = OVarIntSerializer.readAsInteger(bytes);
+      final int len = OVarIntSupport.readAsInteger(bytes);
 
       if (len == 0) {
         // SCAN COMPLETED
@@ -147,7 +147,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     int valuePos;
     OType type;
     while (true) {
-      final int len = OVarIntSerializer.readAsInteger(bytes);
+      final int len = OVarIntSupport.readAsInteger(bytes);
       if (len == 0) {
         // SCAN COMPLETED
         break;
@@ -232,7 +232,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   @Override
   public String[] getFieldNames(ODocument reference, final BytesContainer bytes) {
     // SKIP CLASS NAME
-    final int classNameLen = OVarIntSerializer.readAsInteger(bytes);
+    final int classNameLen = OVarIntSupport.readAsInteger(bytes);
     bytes.skip(classNameLen);
 
     final List<String> result = new ArrayList<String>();
@@ -240,7 +240,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     String fieldName;
     while (true) {
       OGlobalProperty prop = null;
-      final int len = OVarIntSerializer.readAsInteger(bytes);
+      final int len = OVarIntSupport.readAsInteger(bytes);
       if (len == 0) {
         // SCAN COMPLETED
         break;
@@ -292,13 +292,13 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     Object value = null;
     switch (type) {
     case INTEGER:
-      value = OVarIntSerializer.readAsInteger(bytes);
+      value = OVarIntSupport.readAsInteger(bytes);
       break;
     case LONG:
-      value = OVarIntSerializer.readAsLong(bytes);
+      value = OVarIntSupport.readAsLong(bytes);
       break;
     case SHORT:
-      value = OVarIntSerializer.readAsShort(bytes);
+      value = OVarIntSupport.readAsShort(bytes);
       break;
     case STRING:
       value = readString(bytes);
@@ -316,10 +316,10 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       value = readByte(bytes) == 1;
       break;
     case DATETIME:
-      value = new Date(OVarIntSerializer.readAsLong(bytes));
+      value = new Date(OVarIntSupport.readAsLong(bytes));
       break;
     case DATE:
-      long savedTime = OVarIntSerializer.readAsLong(bytes) * MILLISEC_PER_DAY;
+      long savedTime = OVarIntSupport.readAsLong(bytes) * MILLISEC_PER_DAY;
       savedTime = convertDayToTimezone(TimeZone.getTimeZone("GMT"), ODateHelper.getDatabaseTimeZone(), savedTime);
       value = new Date(savedTime);
       break;
@@ -398,7 +398,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private byte[] readBinary(BytesContainer bytes) {
-    int n = OVarIntSerializer.readAsInteger(bytes);
+    int n = OVarIntSupport.readAsInteger(bytes);
     byte[] newValue = new byte[n];
     System.arraycopy(bytes.bytes, bytes.offset, newValue, 0, newValue.length);
     bytes.skip(n);
@@ -406,7 +406,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private Map<Object, OIdentifiable> readLinkMap(final BytesContainer bytes, final ODocument document) {
-    int size = OVarIntSerializer.readAsInteger(bytes);
+    int size = OVarIntSupport.readAsInteger(bytes);
     Map<Object, OIdentifiable> result = new ORecordLazyMap(document);
     while ((size--) > 0) {
       OType keyType = readOType(bytes);
@@ -421,7 +421,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private Object readEmbeddedMap(final BytesContainer bytes, final ODocument document) {
-    int size = OVarIntSerializer.readAsInteger(bytes);
+    int size = OVarIntSupport.readAsInteger(bytes);
     final Map<Object, Object> result = new OTrackedMap<Object>(document);
     int last = 0;
     while ((size--) > 0) {
@@ -446,7 +446,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private Collection<OIdentifiable> readLinkCollection(BytesContainer bytes, Collection<OIdentifiable> found) {
-    final int items = OVarIntSerializer.readAsInteger(bytes);
+    final int items = OVarIntSupport.readAsInteger(bytes);
     for (int i = 0; i < items; i++) {
       ORecordId id = readOptimizedLink(bytes);
       if (id.equals(NULL_RECORD_ID))
@@ -458,12 +458,12 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private ORecordId readOptimizedLink(final BytesContainer bytes) {
-    return new ORecordId(OVarIntSerializer.readAsInteger(bytes), OVarIntSerializer.readAsLong(bytes));
+    return new ORecordId(OVarIntSupport.readAsInteger(bytes), OVarIntSupport.readAsLong(bytes));
   }
 
   private Collection<?> readEmbeddedCollection(final BytesContainer bytes, final Collection<Object> found,
       final ODocument document) {
-    final int items = OVarIntSerializer.readAsInteger(bytes);
+    final int items = OVarIntSupport.readAsInteger(bytes);
     OType type = readOType(bytes);
 
     if (type == OType.ANY) {
@@ -500,7 +500,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     case INTEGER:
     case LONG:
     case SHORT:
-      pointer = OVarIntSerializer.write(bytes, ((Number) value).longValue());
+      pointer = OVarIntSupport.write(bytes, ((Number) value).longValue());
       break;
     case STRING:
       pointer = writeString(bytes, value.toString());
@@ -525,9 +525,9 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       break;
     case DATETIME:
       if (value instanceof Long) {
-        pointer = OVarIntSerializer.write(bytes, (Long) value);
+        pointer = OVarIntSupport.write(bytes, (Long) value);
       } else
-        pointer = OVarIntSerializer.write(bytes, ((Date) value).getTime());
+        pointer = OVarIntSupport.write(bytes, ((Date) value).getTime());
       break;
     case DATE:
       long dateValue;
@@ -536,7 +536,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       } else
         dateValue = ((Date) value).getTime();
       dateValue = convertDayToTimezone(ODateHelper.getDatabaseTimeZone(), TimeZone.getTimeZone("GMT"), dateValue);
-      pointer = OVarIntSerializer.write(bytes, dateValue / MILLISEC_PER_DAY);
+      pointer = OVarIntSupport.write(bytes, dateValue / MILLISEC_PER_DAY);
       break;
     case EMBEDDED:
       pointer = bytes.offset;
@@ -598,7 +598,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private int writeBinary(final BytesContainer bytes, final byte[] valueBytes) {
-    final int pointer = OVarIntSerializer.write(bytes, valueBytes.length);
+    final int pointer = OVarIntSupport.write(bytes, valueBytes.length);
     final int start = bytes.alloc(valueBytes.length);
     System.arraycopy(valueBytes, 0, bytes.bytes, start, valueBytes.length);
     return pointer;
@@ -613,7 +613,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       ((ORecordLazyMultiValue) map).setAutoConvertToRecord(false);
 
     try {
-      final int fullPos = OVarIntSerializer.write(bytes, map.size());
+      final int fullPos = OVarIntSupport.write(bytes, map.size());
       for (Entry<Object, OIdentifiable> entry : map.entrySet()) {
         // TODO:check skip of complex types
         // FIXME: changed to support only string key on map
@@ -638,7 +638,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
     final int[] pos = new int[map.size()];
     int i = 0;
     Entry<Object, Object> values[] = new Entry[map.size()];
-    final int fullPos = OVarIntSerializer.write(bytes, map.size());
+    final int fullPos = OVarIntSupport.write(bytes, map.size());
     for (Entry<Object, Object> entry : map.entrySet()) {
       // TODO:check skip of complex types
       // FIXME: changed to support only string key on map
@@ -668,8 +668,8 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private int writeNullLink(final BytesContainer bytes) {
-    final int pos = OVarIntSerializer.write(bytes, NULL_RECORD_ID.getIdentity().getClusterId());
-    OVarIntSerializer.write(bytes, NULL_RECORD_ID.getIdentity().getClusterPosition());
+    final int pos = OVarIntSupport.write(bytes, NULL_RECORD_ID.getIdentity().getClusterId());
+    OVarIntSupport.write(bytes, NULL_RECORD_ID.getIdentity().getClusterPosition());
     return pos;
 
   }
@@ -680,13 +680,13 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       if (real != null)
         link = real;
     }
-    final int pos = OVarIntSerializer.write(bytes, link.getIdentity().getClusterId());
-    OVarIntSerializer.write(bytes, link.getIdentity().getClusterPosition());
+    final int pos = OVarIntSupport.write(bytes, link.getIdentity().getClusterId());
+    OVarIntSupport.write(bytes, link.getIdentity().getClusterPosition());
     return pos;
   }
 
   private int writeLinkCollection(final BytesContainer bytes, final Collection<OIdentifiable> value) {
-    final int pos = OVarIntSerializer.write(bytes, value.size());
+    final int pos = OVarIntSupport.write(bytes, value.size());
 
     final boolean disabledAutoConversion =
         value instanceof ORecordLazyMultiValue && ((ORecordLazyMultiValue) value).isAutoConvertToRecord();
@@ -713,7 +713,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private int writeEmbeddedCollection(final BytesContainer bytes, final Collection<?> value, final OType linkedType) {
-    final int pos = OVarIntSerializer.write(bytes, value.size());
+    final int pos = OVarIntSupport.write(bytes, value.size());
     // TODO manage embedded type from schema and auto-determined.
     writeOType(bytes, bytes.alloc(1), OType.ANY);
     for (Object itemValue : value) {
@@ -759,7 +759,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   protected String readString(final BytesContainer bytes) {
-    final int len = OVarIntSerializer.readAsInteger(bytes);
+    final int len = OVarIntSupport.readAsInteger(bytes);
     final String res = stringFromBytes(bytes.bytes, bytes.offset, len);
     bytes.skip(len);
     return res;
@@ -782,12 +782,12 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
   }
 
   private int writeEmptyString(final BytesContainer bytes) {
-    return OVarIntSerializer.write(bytes, 0);
+    return OVarIntSupport.write(bytes, 0);
   }
 
   private int writeString(final BytesContainer bytes, final String toWrite) {
     final byte[] nameBytes = bytesFromString(toWrite);
-    final int pointer = OVarIntSerializer.write(bytes, nameBytes.length);
+    final int pointer = OVarIntSupport.write(bytes, nameBytes.length);
     final int start = bytes.alloc(nameBytes.length);
     System.arraycopy(nameBytes, 0, bytes.bytes, start, nameBytes.length);
     return pointer;

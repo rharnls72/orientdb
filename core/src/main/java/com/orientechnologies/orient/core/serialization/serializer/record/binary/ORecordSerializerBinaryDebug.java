@@ -4,7 +4,6 @@ import java.util.ArrayList;
 
 import com.orientechnologies.common.exception.OSystemException;
 import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
-import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.metadata.OMetadataInternal;
 import com.orientechnologies.orient.core.metadata.schema.OGlobalProperty;
 import com.orientechnologies.orient.core.metadata.schema.OImmutableSchema;
@@ -39,7 +38,7 @@ public class ORecordSerializerBinaryDebug extends ORecordSerializerBinaryV0 {
       ORecordSerializationDebugProperty debugProperty = new ORecordSerializationDebugProperty();
       OGlobalProperty prop = null;
       try {
-        final int len = OVarIntSerializer.readAsInteger(bytes);
+        final int len = OVarIntSupport.readAsInteger(bytes);
         if (len != 0)
           debugInfo.properties.add(debugProperty);
         if (len == 0) {

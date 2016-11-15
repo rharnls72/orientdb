@@ -25,7 +25,7 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALCh
 
 import java.nio.ByteBuffer;
 
-public class OVarIntSerializer {
+public class OVarIntSupport {
 
   public static int write(BytesContainer bytes, long value) {
     value = signedToUnsigned(value);
