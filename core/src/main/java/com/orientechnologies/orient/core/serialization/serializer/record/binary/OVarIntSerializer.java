@@ -25,7 +25,7 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALCh
 
 import java.nio.ByteBuffer;
 
-public class OVarIntSupport {
+public class OVarIntSerializer {
 
   public static int write(BytesContainer bytes, long value) {
     value = signedToUnsigned(value);
@@ -213,6 +213,28 @@ public class OVarIntSupport {
   }
 
   /**
+   * Obtains the size of the serialized value stored in the passed buffer at the given position, takes into account the given WAL
+   * changes.
+   *
+   * @param buffer     the buffer containing the serialized value of interest
+   * @param walChanges the WAL changes to inspect for changes
+   * @param position   the value position inside the buffer
+   *
+   * @return the size in bytes
+   */
+  public static int sizeOfSerializedValue(ByteBuffer buffer, OWALChanges walChanges, int position) {
+    int size = 1;
+
+    while (walChanges.getByteValue(buffer, position++) < 0)
+      ++size;
+
+    if (size > 10)
+      throw new IllegalStateException("Variable length quantity size is too long (must be <= 10)");
+
+    return size;
+  }
+
+  /**
    * Deserializes the unsigned long value from the passed buffer.
    *
    * @param buffer the buffer containing the serialized value of interest at its current position
@@ -261,6 +283,30 @@ public class OVarIntSupport {
   }
 
   /**
+   * Deserializes the unsigned long value from the passed buffer at the given position, takes into account the given WAL changes.
+   *
+   * @param buffer     the buffer containing the serialized value of interest
+   * @param walChanges the WAL changes to inspect for changes
+   * @param position   the value position inside the buffer
+   *
+   * @return the deserialized value
+   */
+  public static long readUnsignedLong(ByteBuffer buffer, OWALChanges walChanges, int position) {
+    long value = 0L;
+    int i = 0;
+    long b;
+
+    while (((b = walChanges.getByteValue(buffer, position++)) & 0x80L) != 0) {
+      value |= (b & 0x7F) << i;
+      i += 7;
+      if (i > 63)
+        throw new IllegalStateException("Variable length quantity is too long (must be <= 63)");
+    }
+
+    return value | (b << i);
+  }
+
+  /**
    * Deserializes the unsigned integer value from the passed buffer.
    *
    * @param buffer the buffer containing the serialized value of interest at its current position
@@ -281,6 +327,19 @@ public class OVarIntSupport {
    * @return the deserialized value
    */
   public static int readUnsignedInteger(ByteBuffer buffer, OWALChanges walChanges, OModifiableInteger position) {
+    return (int) readUnsignedLong(buffer, walChanges, position);
+  }
+
+  /**
+   * Deserializes the unsigned integer value from the passed buffer at the given position, takes into account the given WAL changes.
+   *
+   * @param buffer     the buffer containing the serialized value of interest
+   * @param walChanges the WAL changes to inspect for changes
+   * @param position   the value position inside the buffer
+   *
+   * @return the deserialized value
+   */
+  public static int readUnsignedInteger(ByteBuffer buffer, OWALChanges walChanges, int position) {
     return (int) readUnsignedLong(buffer, walChanges, position);
   }
 }

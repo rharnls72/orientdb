@@ -18,7 +18,7 @@ package com.orientechnologies.orient.test.database.speed;
 import org.testng.annotations.Test;
 
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.BytesContainer;
-import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSupport;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSerializer;
 import com.orientechnologies.orient.test.database.base.OrientMonoThreadTest;
 
 @Test
@@ -43,15 +43,15 @@ public class VarIntSpeedTest extends OrientMonoThreadTest {
   @Test(enabled = false)
   public void cycle() {
     BytesContainer container = new BytesContainer();
-    OVarIntSupport.write(container, 20);
-    OVarIntSupport.write(container, 200);
-    OVarIntSupport.write(container, 20000);
-    OVarIntSupport.write(container, 200000000000000000L);
+    OVarIntSerializer.write(container, 20);
+    OVarIntSerializer.write(container, 200);
+    OVarIntSerializer.write(container, 20000);
+    OVarIntSerializer.write(container, 200000000000000000L);
     container.offset = 0;
-    OVarIntSupport.readAsInteger(container);
-    OVarIntSupport.readAsInteger(container);
-    OVarIntSupport.readAsInteger(container);
-    OVarIntSupport.readAsLong(container);
+    OVarIntSerializer.readAsInteger(container);
+    OVarIntSerializer.readAsInteger(container);
+    OVarIntSerializer.readAsInteger(container);
+    OVarIntSerializer.readAsLong(container);
   }
 
   @Override

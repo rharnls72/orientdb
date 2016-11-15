@@ -25,7 +25,7 @@ import com.orientechnologies.common.types.OModifiableInteger;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
-import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSupport;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSerializer;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWALChanges;
 
 import java.nio.ByteBuffer;
@@ -38,7 +38,7 @@ public class OVarLinkSerializer implements OBinarySerializer<OIdentifiable> {
   /**
    * The identifier of the serializer.
    */
-  public static final byte ID = 33;
+  public static final byte ID = 30;
 
   /**
    * The global stateless instance of the serializer.
@@ -68,8 +68,7 @@ public class OVarLinkSerializer implements OBinarySerializer<OIdentifiable> {
   @Override
   public int getObjectSize(OIdentifiable rid, Object... hints) {
     final ORID identity = rid.getIdentity();
-    return OVarIntSupport.sizeOfUnsigned(identity.getClusterId()) + OVarIntSupport
-        .sizeOfUnsigned(identity.getClusterPosition());
+    return OVarIntSerializer.sizeOfUnsigned(identity.getClusterId()) + OVarIntSerializer.sizeOfUnsigned(identity.getClusterPosition());
   }
 
   @Override
@@ -105,31 +104,31 @@ public class OVarLinkSerializer implements OBinarySerializer<OIdentifiable> {
   @Override
   public void serializeInByteBufferObject(OIdentifiable object, ByteBuffer buffer, Object... hints) {
     final ORID identity = object.getIdentity();
-    OVarIntSupport.writeUnsigned(identity.getClusterId(), buffer);
-    OVarIntSupport.writeUnsigned(identity.getClusterPosition(), buffer);
+    OVarIntSerializer.writeUnsigned(identity.getClusterId(), buffer);
+    OVarIntSerializer.writeUnsigned(identity.getClusterPosition(), buffer);
   }
 
   @Override
   public ORecordId deserializeFromByteBufferObject(ByteBuffer buffer) {
-    return new ORecordId(OVarIntSupport.readUnsignedInteger(buffer), OVarIntSupport.readUnsignedLong(buffer));
+    return new ORecordId(OVarIntSerializer.readUnsignedInteger(buffer), OVarIntSerializer.readUnsignedLong(buffer));
   }
 
   @Override
   public int getObjectSizeInByteBuffer(ByteBuffer buffer) {
-    return OVarIntSupport.sizeOfSerializedValue(buffer) + OVarIntSupport.sizeOfSerializedValue(buffer);
+    return OVarIntSerializer.sizeOfSerializedValue(buffer) + OVarIntSerializer.sizeOfSerializedValue(buffer);
   }
 
   @Override
   public ORecordId deserializeFromByteBufferObject(ByteBuffer buffer, OWALChanges walChanges, int offset) {
     final OModifiableInteger position = new OModifiableInteger(offset);
-    return new ORecordId(OVarIntSupport.readUnsignedInteger(buffer, walChanges, position),
-        OVarIntSupport.readUnsignedLong(buffer, walChanges, position));
+    return new ORecordId(OVarIntSerializer.readUnsignedInteger(buffer, walChanges, position),
+        OVarIntSerializer.readUnsignedLong(buffer, walChanges, position));
   }
 
   @Override
   public int getObjectSizeInByteBuffer(ByteBuffer buffer, OWALChanges walChanges, int offset) {
     final OModifiableInteger position = new OModifiableInteger(offset);
-    return OVarIntSupport.sizeOfSerializedValue(buffer, walChanges, position) + OVarIntSupport
+    return OVarIntSerializer.sizeOfSerializedValue(buffer, walChanges, position) + OVarIntSerializer
         .sizeOfSerializedValue(buffer, walChanges, position);
   }
 }

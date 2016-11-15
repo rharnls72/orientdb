@@ -20,10 +20,7 @@
 
 package com.orientechnologies.orient.core.storage.impl.local.paginated.base;
 
-import com.orientechnologies.common.serialization.types.OBinarySerializer;
-import com.orientechnologies.common.serialization.types.OByteSerializer;
-import com.orientechnologies.common.serialization.types.OIntegerSerializer;
-import com.orientechnologies.common.serialization.types.OLongSerializer;
+import com.orientechnologies.common.serialization.types.*;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import com.orientechnologies.orient.core.storage.cache.OCachePointer;
@@ -105,6 +102,31 @@ public class ODurablePage {
     return new OLogSequenceNumber(segment, position);
   }
 
+  protected short getShortValue(int pageOffset) {
+    assert cacheEntry.isLockAcquiredByCurrentThread();
+
+    final ByteBuffer buffer = pointer.getSharedBuffer();
+    if (changes == null) {
+      return buffer.getShort(pageOffset);
+    }
+
+    return changes.getShortValue(buffer, pageOffset);
+  }
+
+  protected int setShortValue(int pageOffset, short value) {
+    assert cacheEntry.isLockAcquiredByCurrentThread();
+
+    final ByteBuffer buffer = pointer.getExclusiveBuffer();
+    if (changes != null) {
+      changes.setShortValue(buffer, value, pageOffset);
+    } else {
+      buffer.putShort(pageOffset, value);
+      cacheEntry.markDirty();
+    }
+
+    return OShortSerializer.SHORT_SIZE;
+  }
+
   protected int getIntValue(int pageOffset) {
     assert cacheEntry.isLockAcquiredByCurrentThread();
 
@@ -178,7 +200,7 @@ public class ODurablePage {
     return changes.getByteValue(buffer, pageOffset);
   }
 
-  protected int setIntValue(int pageOffset, int value) throws IOException {
+  protected int setIntValue(int pageOffset, int value) {
     assert cacheEntry.isLockAcquiredByCurrentThread();
 
     final ByteBuffer buffer = pointer.getExclusiveBuffer();

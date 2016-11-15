@@ -19,6 +19,8 @@ public interface OWALChanges {
 
   short getShortValue(ByteBuffer buffer, int offset);
 
+  void setShortValue(ByteBuffer buffer, short value, int offset);
+
   int getIntValue(ByteBuffer buffer, int offset);
 
   long getLongValue(ByteBuffer buffer, int offset);

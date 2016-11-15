@@ -38,7 +38,7 @@ public class ORecordSerializerBinaryDebug extends ORecordSerializerBinaryV0 {
       ORecordSerializationDebugProperty debugProperty = new ORecordSerializationDebugProperty();
       OGlobalProperty prop = null;
       try {
-        final int len = OVarIntSupport.readAsInteger(bytes);
+        final int len = OVarIntSerializer.readAsInteger(bytes);
         if (len != 0)
           debugInfo.properties.add(debugProperty);
         if (len == 0) {
