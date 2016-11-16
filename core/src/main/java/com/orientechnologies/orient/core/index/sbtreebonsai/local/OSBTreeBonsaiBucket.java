@@ -20,6 +20,7 @@
 
 package com.orientechnologies.orient.core.index.sbtreebonsai.local;
 
+import com.orientechnologies.common.comparator.OComparatorFactory;
 import com.orientechnologies.common.comparator.ODefaultComparator;
 import com.orientechnologies.common.serialization.types.*;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
@@ -43,6 +44,25 @@ import java.util.Map;
 public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   public static final int MAX_BUCKET_SIZE_BYTES = OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getValueAsInteger() * 1024;
 
+  /**
+   * The result of {@link #updateValue(int, Object)} call, indicates that the new value passed is identical to the stored one.
+   */
+  public static final int UPDATE_NO_CHANGE = 0;
+
+  /**
+   * The result of {@link #updateValue(int, Object)} call, indicates that the stored value was updated.
+   */
+  public static final int UPDATE_UPDATED = 1;
+
+  /**
+   * The result of {@link #updateValue(int, Object)} call, indicates that the new value is of a different size than the stored one
+   * and it's not updated. For example, the caller may handle this situation by removing the key and inserting it back with the new
+   * value.
+   */
+  public static final int UPDATE_REINSERT = 2;
+
+  private static final Comparator<byte[]> BYTE_ARRAY_COMPARATOR = OComparatorFactory.INSTANCE.getComparator(byte[].class);
+
   private static final byte VERSION_1 = 0;
   private static final byte VERSION_2 = 1;
 
@@ -64,7 +84,10 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   private final int ID_OFFSET;
   private final int POSITIONS_ARRAY_OFFSET;
 
-  private static final int MAX_ENTREE_SIZE = 24576000;
+  private static final int MAX_ENTREE_SIZE =
+      MAX_BUCKET_SIZE_BYTES - VALUE_SERIALIZER_OFFSET /* fixed headers */ - OByteSerializer.BYTE_SIZE /* value serializer ID */
+          - OLongSerializer.LONG_SIZE /* tree ID */ - OIntegerSerializer.INT_SIZE /* entry position */
+          - OBonsaiBucketPointer.SIZE * 2 /* non-leaf pointers */;
 
   private final boolean isLeaf;
   private final byte    version;
@@ -170,7 +193,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     setValueSerializerId(valueSerializer.getId());
 
     this.keySerializer = upgradeSerializer(keySerializer, version);
-    this.valueSerializer = valueSerializer;
+    this.valueSerializer = upgradeSerializer(valueSerializer, version);
 
     ID_OFFSET = VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
     POSITIONS_ARRAY_OFFSET = ID_OFFSET + OLongSerializer.LONG_SIZE;
@@ -189,7 +212,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     this.version = decodeVersion(flags);
 
     this.keySerializer = upgradeSerializer(keySerializer, version);
-    this.valueSerializer = valueSerializer;
+    this.valueSerializer = upgradeSerializer(valueSerializer, version);
     this.tree = tree;
 
     ID_OFFSET = version == VERSION_1 ? -1 : VALUE_SERIALIZER_OFFSET + OByteSerializer.BYTE_SIZE;
@@ -251,8 +274,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
     int entrySize = getObjectSizeInDirectMemory(keySerializer, offset + entryPosition);
     if (isLeaf) {
-      assert valueSerializer.isFixedLength();
-      entrySize += valueSerializer.getFixedLength();
+      entrySize += getObjectSizeInDirectMemory(valueSerializer, offset + entryPosition + entrySize);
     } else {
       throw new IllegalStateException("Remove is applies to leaf buckets only");
     }
@@ -355,8 +377,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     int entrySize = keySize;
 
     if (isLeaf) {
-      assert valueSerializer.isFixedLength();
-      valueSize = valueSerializer.getFixedLength();
+      valueSize = valueSerializer.getObjectSize(treeEntry.value);
 
       entrySize += valueSize;
 
@@ -427,24 +448,24 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   }
 
   public int updateValue(int index, V value) throws IOException {
-    assert valueSerializer.isFixedLength();
-
     int entryPosition = getPosition(index);
     entryPosition += getObjectSizeInDirectMemory(keySerializer, offset + entryPosition);
 
-    final int size = valueSerializer.getFixedLength();
+    final int oldSize = getObjectSizeInDirectMemory(valueSerializer, offset + entryPosition);
+    final int newSize = valueSerializer.getObjectSize(value);
 
-    byte[] serializedValue = new byte[size];
-    valueSerializer.serializeNativeObject(value, serializedValue, 0);
+    if (oldSize != newSize)
+      return UPDATE_REINSERT;
 
-    byte[] oldSerializedValue = getBinaryValue(offset + entryPosition, size);
+    final byte[] oldBytes = getBinaryValue(offset + entryPosition, oldSize);
+    final byte[] newBytes = new byte[newSize];
+    valueSerializer.serializeNativeObject(value, newBytes, 0);
 
-    if (ODefaultComparator.INSTANCE.compare(oldSerializedValue, serializedValue) == 0)
-      return 0;
+    if (BYTE_ARRAY_COMPARATOR.compare(oldBytes, newBytes) == 0)
+      return UPDATE_NO_CHANGE;
 
-    setBinaryValue(offset + entryPosition, serializedValue);
-
-    return 1;
+    setBinaryValue(offset + entryPosition, newBytes);
+    return UPDATE_UPDATED;
   }
 
   public OBonsaiBucketPointer getFreeListPointer() {
@@ -530,14 +551,14 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
   private int getPosition(int index) {
     return version >= VERSION_2 ?
-        getShortValue(POSITIONS_ARRAY_OFFSET + offset + index * OShortSerializer.SHORT_SIZE) :
-        getIntValue(POSITIONS_ARRAY_OFFSET + offset + index * OIntegerSerializer.INT_SIZE);
+        getShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE) :
+        getIntValue(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE);
   }
 
   private int setPosition(int index, int position) {
     return version >= VERSION_2 ?
-        setShortValue(POSITIONS_ARRAY_OFFSET + offset + index * OShortSerializer.SHORT_SIZE, (short) position) :
-        setIntValue(POSITIONS_ARRAY_OFFSET + offset + index * OIntegerSerializer.INT_SIZE, position);
+        setShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE, (short) position) :
+        setIntValue(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE, position);
   }
 
   private int readPosition(int offset) {

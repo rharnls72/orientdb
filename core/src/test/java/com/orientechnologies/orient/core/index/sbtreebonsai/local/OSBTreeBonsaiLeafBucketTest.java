@@ -1,23 +1,18 @@
 package com.orientechnologies.orient.core.index.sbtreebonsai.local;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Random;
-import java.util.TreeSet;
-
 import com.orientechnologies.common.directmemory.OByteBufferPool;
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
 import com.orientechnologies.orient.core.storage.cache.OCachePointer;
-import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
+import org.testng.Assert;
+import org.testng.annotations.Test;
+
+import java.nio.ByteBuffer;
+import java.util.*;
 
 /**
  * @author Andrey Lomakin
@@ -133,15 +128,19 @@ public class OSBTreeBonsaiLeafBucketTest {
 
     Assert.assertEquals(keyIndexMap.size(), treeBucket.size());
 
+    final Set<Integer> updated = new HashSet<Integer>();
     for (int i = 0; i < treeBucket.size(); i++)
-      treeBucket.updateValue(i, new ORecordId(i + 5, i + 5));
+      if (treeBucket.updateValue(i, new ORecordId(i + 5, i + 5)) == OSBTreeBonsaiBucket.UPDATE_UPDATED)
+        updated.add(i);
 
     for (Map.Entry<Long, Integer> keyIndexEntry : keyIndexMap.entrySet()) {
       OSBTreeBonsaiBucket.SBTreeEntry<Long, OIdentifiable> entry = treeBucket.getEntry(keyIndexEntry.getValue());
 
-      Assert.assertEquals(entry,
-          new OSBTreeBonsaiBucket.SBTreeEntry<Long, OIdentifiable>(OBonsaiBucketPointer.NULL, OBonsaiBucketPointer.NULL,
-              keyIndexEntry.getKey(), new ORecordId(keyIndexEntry.getValue() + 5, keyIndexEntry.getValue() + 5)));
+      if (updated.contains(keyIndexEntry.getValue()))
+        Assert.assertEquals(entry,
+            new OSBTreeBonsaiBucket.SBTreeEntry<Long, OIdentifiable>(OBonsaiBucketPointer.NULL, OBonsaiBucketPointer.NULL,
+                keyIndexEntry.getKey(), new ORecordId(keyIndexEntry.getValue() + 5, keyIndexEntry.getValue() + 5)));
+
       Assert.assertEquals(keyIndexEntry.getKey(), treeBucket.getKey(keyIndexEntry.getValue()));
     }
 

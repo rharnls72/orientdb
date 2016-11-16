@@ -256,15 +256,35 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
             keySerializer, valueSerializer, getChanges(atomicOperation, keyBucketCacheEntry), this);
 
         final boolean itemFound = bucketSearchResult.itemIndex >= 0;
-        boolean result = true;
+        final boolean result;
+
+        int insertionIndex;
+
         if (itemFound) {
           final int updateResult = keyBucket.updateValue(bucketSearchResult.itemIndex, value);
-          assert updateResult == 0 || updateResult == 1;
-
-          result = updateResult != 0;
+          switch (updateResult) {
+          case OSBTreeBonsaiBucket.UPDATE_NO_CHANGE:
+            insertionIndex = -1;
+            result = false;
+            break;
+          case OSBTreeBonsaiBucket.UPDATE_UPDATED:
+            insertionIndex = -1;
+            result = true;
+            break;
+          case OSBTreeBonsaiBucket.UPDATE_REINSERT:
+            keyBucket.remove(bucketSearchResult.itemIndex);
+            insertionIndex = bucketSearchResult.itemIndex;
+            result = true;
+            break;
+          default:
+            throw new IllegalStateException("unexpected update result");
+          }
         } else {
-          int insertionIndex = -bucketSearchResult.itemIndex - 1;
+          insertionIndex = -bucketSearchResult.itemIndex - 1;
+          result = true;
+        }
 
+        if (insertionIndex != -1) {
           while (!keyBucket.addEntry(insertionIndex,
               new OSBTreeBonsaiBucket.SBTreeEntry<K, V>(OBonsaiBucketPointer.NULL, OBonsaiBucketPointer.NULL, key, value), true)) {
             keyBucketCacheEntry.releaseExclusiveLock();
