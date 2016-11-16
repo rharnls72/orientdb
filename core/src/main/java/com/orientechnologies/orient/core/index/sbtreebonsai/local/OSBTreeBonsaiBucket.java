@@ -297,11 +297,13 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
       return new SBTreeEntry<K, V>(OBonsaiBucketPointer.NULL, OBonsaiBucketPointer.NULL, key, value);
     } else {
+      final int pointerSize = getPointerSize();
+
       OBonsaiBucketPointer leftChild = getBucketPointer(offset + entryPosition);
-      entryPosition += OBonsaiBucketPointer.SIZE;
+      entryPosition += pointerSize;
 
       OBonsaiBucketPointer rightChild = getBucketPointer(offset + entryPosition);
-      entryPosition += OBonsaiBucketPointer.SIZE;
+      entryPosition += pointerSize;
 
       K key = deserializeFromDirectMemory(keySerializer, offset + entryPosition);
 
@@ -313,7 +315,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     int entryPosition = getPosition(index);
 
     if (!isLeaf)
-      entryPosition += 2 * (OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE);
+      entryPosition += 2 * getPointerSize();
 
     return deserializeFromDirectMemory(keySerializer, offset + entryPosition);
   }
@@ -346,6 +348,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
   public boolean addEntry(int index, SBTreeEntry<K, V> treeEntry, boolean updateNeighbors) throws IOException {
     final int positionSize = getPositionSize();
+    final int pointerSize = getPointerSize();
 
     final int keySize = keySerializer.getObjectSize(treeEntry.key);
     int valueSize = 0;
@@ -359,7 +362,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
       checkEntreeSize(entrySize);
     } else
-      entrySize += 2 * (OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE);
+      entrySize += 2 * pointerSize;
 
     int size = size();
     int freePointer = getIntValue(offset + FREE_POINTER_OFFSET);
@@ -396,10 +399,10 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
     } else {
       setBucketPointer(offset + freePointer, treeEntry.leftChild);
-      freePointer += OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE;
+      freePointer += pointerSize;
 
       setBucketPointer(offset + freePointer, treeEntry.rightChild);
-      freePointer += OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE;
+      freePointer += pointerSize;
 
       byte[] serializedKey = new byte[keySize];
       keySerializer.serializeNativeObject(treeEntry.key, serializedKey, 0);
@@ -415,8 +418,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
         if (index > 0) {
           final int prevEntryPosition = getPosition(index - 1);
-          setBucketPointer(offset + prevEntryPosition + OLongSerializer.LONG_SIZE + OIntegerSerializer.INT_SIZE,
-              treeEntry.leftChild);
+          setBucketPointer(offset + prevEntryPosition + pointerSize, treeEntry.leftChild);
         }
       }
     }
@@ -446,11 +448,11 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   }
 
   public OBonsaiBucketPointer getFreeListPointer() {
-    return getBucketPointer(offset + FREE_LIST_POINTER_OFFSET);
+    return super.getBucketPointer(offset + FREE_LIST_POINTER_OFFSET);
   }
 
   public void setFreeListPointer(OBonsaiBucketPointer pointer) throws IOException {
-    setBucketPointer(offset + FREE_LIST_POINTER_OFFSET, pointer);
+    super.setBucketPointer(offset + FREE_LIST_POINTER_OFFSET, pointer);
   }
 
   public void setDeleted(boolean deleted) {
@@ -463,19 +465,19 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   }
 
   public OBonsaiBucketPointer getLeftSibling() {
-    return getBucketPointer(offset + LEFT_SIBLING_OFFSET);
+    return super.getBucketPointer(offset + LEFT_SIBLING_OFFSET);
   }
 
   public void setLeftSibling(OBonsaiBucketPointer pointer) throws IOException {
-    setBucketPointer(offset + LEFT_SIBLING_OFFSET, pointer);
+    super.setBucketPointer(offset + LEFT_SIBLING_OFFSET, pointer);
   }
 
   public OBonsaiBucketPointer getRightSibling() {
-    return getBucketPointer(offset + RIGHT_SIBLING_OFFSET);
+    return super.getBucketPointer(offset + RIGHT_SIBLING_OFFSET);
   }
 
   public void setRightSibling(OBonsaiBucketPointer pointer) throws IOException {
-    setBucketPointer(offset + RIGHT_SIBLING_OFFSET, pointer);
+    super.setBucketPointer(offset + RIGHT_SIBLING_OFFSET, pointer);
   }
 
   /**
@@ -495,6 +497,23 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
       setLongValue(offset + ID_OFFSET, value);
   }
 
+  @Override
+  protected void setBucketPointer(int pageOffset, OBonsaiBucketPointer value) throws IOException {
+    if (version >= VERSION_2) {
+      assert value.getPageOffset() >= 0 && value.getPageOffset() <= 0xFFFF;
+      setLongValue(pageOffset, value.getPageIndex());
+      setShortValue(pageOffset + OLongSerializer.LONG_SIZE, (short) value.getPageOffset());
+    } else
+      super.setBucketPointer(pageOffset, value);
+  }
+
+  @Override
+  protected OBonsaiBucketPointer getBucketPointer(int offset) {
+    return version >= VERSION_2 ?
+        new OBonsaiBucketPointer(getLongValue(offset), getShortValue(offset + OLongSerializer.LONG_SIZE) & 0xFFFF) :
+        super.getBucketPointer(offset);
+  }
+
   private void checkEntreeSize(int entreeSize) {
     if (entreeSize > MAX_ENTREE_SIZE)
       throw new OSBTreeBonsaiLocalException(
@@ -503,6 +522,10 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
   private int getPositionSize() {
     return version >= VERSION_2 ? OShortSerializer.SHORT_SIZE : OIntegerSerializer.INT_SIZE;
+  }
+
+  private int getPointerSize() {
+    return OLongSerializer.LONG_SIZE + (version >= VERSION_2 ? OShortSerializer.SHORT_SIZE : OIntegerSerializer.INT_SIZE);
   }
 
   private int getPosition(int index) {
@@ -540,8 +563,8 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
       switch (serializer.getId()) {
       case OLinkSerializer.ID:
         return (OBinarySerializer<T>) OVarLinkSerializer.INSTANCE;
-//      case OIntegerSerializer.ID:
-//        return (OBinarySerializer<T>) OVarUnsignedIntegerSerializer.INSTANCE;
+      case OIntegerSerializer.ID:
+        return (OBinarySerializer<T>) OVarUnsignedIntegerSerializer.INSTANCE;
       default:
         return serializer;
       }
