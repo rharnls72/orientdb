@@ -449,10 +449,13 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
   public int updateValue(int index, V value) throws IOException {
     int entryPosition = getPosition(index);
-    entryPosition += getObjectSizeInDirectMemory(keySerializer, offset + entryPosition);
+    final int keySize = getObjectSizeInDirectMemory(keySerializer, offset + entryPosition);
+    entryPosition += keySize;
 
     final int oldSize = getObjectSizeInDirectMemory(valueSerializer, offset + entryPosition);
     final int newSize = valueSerializer.getObjectSize(value);
+
+    checkEntreeSize(keySize + newSize);
 
     if (oldSize != newSize)
       return UPDATE_REINSERT;
