@@ -3027,7 +3027,7 @@ public class ODatabaseDocumentTx extends OListenerManger<ODatabaseListener> impl
     serializer = serializerFactory.getFormat(serializeName);
     if (serializer == null)
       throw new ODatabaseException("RecordSerializer with name '" + serializeName + "' not found ");
-    if (getStorage().getConfiguration().getRecordSerializerVersion() > serializer.getMinSupportedVersion())
+    if (getStorage().getConfiguration().getRecordSerializerVersion() < serializer.getMinSupportedVersion())
       throw new ODatabaseException("Persistent record serializer version is not support by the current implementation");
 
     componentsFactory = getStorage().getComponentsFactory();

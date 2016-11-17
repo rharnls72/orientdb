@@ -28,15 +28,16 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 
 public class ORecordSerializerBinary implements ORecordSerializer {
 
-  public static final String                  NAME                   = "ORecordSerializerBinary";
-  public static final ORecordSerializerBinary INSTANCE               = new ORecordSerializerBinary();
-  private static final byte                   CURRENT_RECORD_VERSION = 0;
+  public static final  String                  NAME                   = "ORecordSerializerBinary";
+  public static final  ORecordSerializerBinary INSTANCE               = new ORecordSerializerBinary();
+  private static final byte                    CURRENT_RECORD_VERSION = 1;
 
-  private ODocumentSerializer[]               serializerByVersion;
+  private ODocumentSerializer[] serializerByVersion;
 
   public ORecordSerializerBinary() {
-    serializerByVersion = new ODocumentSerializer[1];
+    serializerByVersion = new ODocumentSerializer[2];
     serializerByVersion[0] = new ORecordSerializerBinaryV0();
+    serializerByVersion[1] = new ORecordSerializerBinaryV1();
   }
 
   @Override
@@ -46,7 +47,7 @@ public class ORecordSerializerBinary implements ORecordSerializer {
 
   @Override
   public int getMinSupportedVersion() {
-    return CURRENT_RECORD_VERSION;
+    return 0;
   }
 
   public ODocumentSerializer getSerializer(final int iVersion) {
@@ -79,8 +80,9 @@ public class ORecordSerializerBinary implements ORecordSerializer {
       else
         serializerByVersion[iSource[0]].deserialize((ODocument) iRecord, container);
     } catch (RuntimeException e) {
-      OLogManager.instance().warn(this, "Error deserializing record with id %s send this data for debugging: %s ",
-          iRecord.getIdentity().toString(), OBase64Utils.encodeBytes(iSource));
+      OLogManager.instance()
+          .warn(this, "Error deserializing record with id %s send this data for debugging: %s ", iRecord.getIdentity().toString(),
+              OBase64Utils.encodeBytes(iSource));
       throw e;
     }
     return iRecord;
@@ -119,8 +121,8 @@ public class ORecordSerializerBinary implements ORecordSerializer {
 
   private void checkTypeODocument(final ORecord iRecord) {
     if (!(iRecord instanceof ODocument)) {
-      throw new UnsupportedOperationException("The " + ORecordSerializerBinary.NAME + " don't support record of type "
-          + iRecord.getClass().getName());
+      throw new UnsupportedOperationException(
+          "The " + ORecordSerializerBinary.NAME + " don't support record of type " + iRecord.getClass().getName());
     }
   }
 

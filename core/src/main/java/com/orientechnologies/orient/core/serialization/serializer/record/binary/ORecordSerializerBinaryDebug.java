@@ -1,27 +1,34 @@
 package com.orientechnologies.orient.core.serialization.serializer.record.binary;
 
-import java.util.ArrayList;
-
 import com.orientechnologies.common.exception.OSystemException;
 import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
-import com.orientechnologies.orient.core.metadata.OMetadataInternal;
+import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OGlobalProperty;
 import com.orientechnologies.orient.core.metadata.schema.OImmutableSchema;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 
-public class ORecordSerializerBinaryDebug extends ORecordSerializerBinaryV0 {
+import java.util.ArrayList;
+
+import static com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializerBinaryV0.*;
+
+public class ORecordSerializerBinaryDebug implements ODocumentSerializer {
+
+  private final ODocumentSerializer delegate;
+
+  public ORecordSerializerBinaryDebug(ODocumentSerializer delegate) {
+    this.delegate = delegate;
+  }
 
   public ORecordSerializationDebug deserializeDebug(final byte[] iSource, ODatabaseDocumentInternal db) {
     ORecordSerializationDebug debugInfo = new ORecordSerializationDebug();
-    OImmutableSchema schema = ((OMetadataInternal) db.getMetadata()).getImmutableSchemaSnapshot();
+    OImmutableSchema schema = db.getMetadata().getImmutableSchemaSnapshot();
     BytesContainer bytes = new BytesContainer(iSource);
-    if (bytes.bytes[0] != 0)
-      throw new OSystemException("Unsupported binary serialization version");
+    if (bytes.bytes[0] != 0 && bytes.bytes[0] != 1)
+      throw new OSystemException("Unsupported binary serialization version " + bytes.bytes[0]);
     bytes.skip(1);
     try {
-      final String className = readString(bytes);
-      debugInfo.className = className;
+      debugInfo.className = readString(bytes);
     } catch (RuntimeException ex) {
       debugInfo.readingFailure = true;
       debugInfo.readingException = ex;
@@ -36,7 +43,7 @@ public class ORecordSerializerBinaryDebug extends ORecordSerializerBinaryV0 {
     OType type;
     while (true) {
       ORecordSerializationDebugProperty debugProperty = new ORecordSerializationDebugProperty();
-      OGlobalProperty prop = null;
+      OGlobalProperty prop;
       try {
         final int len = OVarIntSerializer.readAsInteger(bytes);
         if (len != 0)
@@ -95,4 +102,45 @@ public class ORecordSerializerBinaryDebug extends ORecordSerializerBinaryV0 {
 
     return debugInfo;
   }
+
+  @Override
+  public void serialize(ODocument document, BytesContainer bytes, boolean iClassOnly) {
+    delegate.serialize(document, bytes, iClassOnly);
+  }
+
+  @Override
+  public int serializeValue(BytesContainer bytes, Object value, OType type, OType linkedType) {
+    return delegate.serializeValue(bytes, value, type, linkedType);
+  }
+
+  @Override
+  public void deserialize(ODocument document, BytesContainer bytes) {
+    delegate.deserialize(document, bytes);
+  }
+
+  @Override
+  public void deserializePartial(ODocument document, BytesContainer bytes, String[] iFields) {
+    delegate.deserializePartial(document, bytes, iFields);
+  }
+
+  @Override
+  public Object deserializeValue(BytesContainer bytes, OType type, ODocument ownerDocument) {
+    return delegate.deserializeValue(bytes, type, ownerDocument);
+  }
+
+  @Override
+  public OBinaryField deserializeField(BytesContainer bytes, OClass iClass, String iFieldName) {
+    return delegate.deserializeField(bytes, iClass, iFieldName);
+  }
+
+  @Override
+  public OBinaryComparator getComparator() {
+    return delegate.getComparator();
+  }
+
+  @Override
+  public String[] getFieldNames(ODocument reference, BytesContainer iBytes) {
+    return delegate.getFieldNames(reference, iBytes);
+  }
+
 }

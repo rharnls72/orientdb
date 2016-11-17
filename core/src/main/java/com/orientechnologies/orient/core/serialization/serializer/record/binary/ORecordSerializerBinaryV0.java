@@ -516,7 +516,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return ODocumentInternal.getGlobalPropertyById(document, id);
   }
 
-  protected OType readOType(final BytesContainer bytes) {
+  protected static OType readOType(final BytesContainer bytes) {
     return OType.getById(readByte(bytes));
   }
 
