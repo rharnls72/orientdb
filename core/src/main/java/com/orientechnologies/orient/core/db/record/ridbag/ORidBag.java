@@ -51,12 +51,10 @@ import java.util.UUID;
  *
  * Could be tree based and embedded representation.<br>
  * <ul>
- * <li>
- * <b>Embedded</b> stores its content directly to the document that owns it.<br>
+ * <li><b>Embedded</b> stores its content directly to the document that owns it.<br>
  * It better fits for cases when only small amount of links are stored to the bag.<br>
  * </li>
- * <li>
- * <b>Tree-based</b> implementation stores its content in a separate data structure called {@link OSBTreeBonsai}.<br>
+ * <li><b>Tree-based</b> implementation stores its content in a separate data structure called {@link OSBTreeBonsai}.<br>
  * It fits great for cases when you have a huge amount of links.<br>
  * </li>
  * </ul>
@@ -79,10 +77,10 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     OTrackedMultiValue<OIdentifiable, OIdentifiable>, OCollection<OIdentifiable> {
   private ORidBagDelegate delegate;
 
-  private int topThreshold    = OGlobalConfiguration.RID_BAG_EMBEDDED_TO_SBTREEBONSAI_THRESHOLD.getValueAsInteger();
-  private int bottomThreshold = OGlobalConfiguration.RID_BAG_SBTREEBONSAI_TO_EMBEDDED_THRESHOLD.getValueAsInteger();
+  private int             topThreshold    = OGlobalConfiguration.RID_BAG_EMBEDDED_TO_SBTREEBONSAI_THRESHOLD.getValueAsInteger();
+  private int             bottomThreshold = OGlobalConfiguration.RID_BAG_SBTREEBONSAI_TO_EMBEDDED_THRESHOLD.getValueAsInteger();
 
-  private UUID uuid;
+  private UUID            uuid;
 
   public ORidBag(final ORidBag ridBag) {
     init();
@@ -195,51 +193,9 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     return delegate instanceof OEmbeddedRidBag;
   }
 
-  public int toStream(BytesContainer bytesContainer, Encoding encoding) throws OSerializationException {
+  public int toStream(BytesContainer bytes) throws OSerializationException {
 
-    final ORecordSerializationContext context = ORecordSerializationContext.getContext();
-    if (context != null) {
-      if (isEmbedded() && ODatabaseRecordThreadLocal.INSTANCE.get().getSbTreeCollectionManager() != null
-          && delegate.size() >= topThreshold) {
-        ORidBagDelegate oldDelegate = delegate;
-        delegate = new OSBTreeRidBag();
-        boolean oldAutoConvert = oldDelegate.isAutoConvertToRecord();
-        oldDelegate.setAutoConvertToRecord(false);
-
-        for (OIdentifiable identifiable : oldDelegate)
-          delegate.add(identifiable);
-
-        final ORecord owner = oldDelegate.getOwner();
-        delegate.setOwner(owner);
-
-        for (OMultiValueChangeListener<OIdentifiable, OIdentifiable> listener : oldDelegate.getChangeListeners())
-          delegate.addChangeListener(listener);
-
-        owner.setDirty();
-
-        oldDelegate.setAutoConvertToRecord(oldAutoConvert);
-        oldDelegate.requestDelete();
-      } else if (bottomThreshold >= 0 && !isEmbedded() && delegate.size() <= bottomThreshold) {
-        ORidBagDelegate oldDelegate = delegate;
-        boolean oldAutoConvert = oldDelegate.isAutoConvertToRecord();
-        oldDelegate.setAutoConvertToRecord(false);
-        delegate = new OEmbeddedRidBag();
-
-        for (OIdentifiable identifiable : oldDelegate)
-          delegate.add(identifiable);
-
-        final ORecord owner = oldDelegate.getOwner();
-        delegate.setOwner(owner);
-
-        for (OMultiValueChangeListener<OIdentifiable, OIdentifiable> listener : oldDelegate.getChangeListeners())
-          delegate.addChangeListener(listener);
-
-        owner.setDirty();
-
-        oldDelegate.setAutoConvertToRecord(oldAutoConvert);
-        oldDelegate.requestDelete();
-      }
-    }
+    checkEmbeddedTreeConvertion();
 
     final UUID oldUuid = uuid;
     final OSBTreeCollectionManager sbTreeCollectionManager = ODatabaseRecordThreadLocal.INSTANCE.get().getSbTreeCollectionManager();
@@ -250,11 +206,36 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
     boolean hasUuid = uuid != null;
 
-    final int bagSerializedSize = delegate.getSerializedSize(encoding);
-    final int serializedSize = OByteSerializer.BYTE_SIZE + bagSerializedSize + ((hasUuid) ? OUUIDSerializer.UUID_SIZE : 0);
-    int pointer = bytesContainer.alloc(serializedSize);
-    int offset = pointer;
-    final byte[] stream = bytesContainer.bytes;
+    byte configByte = 0;
+    if (isEmbedded())
+      configByte |= 1;
+
+    if (hasUuid)
+      configByte |= 2;
+    int pointer = bytes.alloc(1);
+    bytes.bytes[pointer] = configByte;
+
+    if (hasUuid) {
+      int uuidOffset = bytes.alloc(OUUIDSerializer.INSTANCE.getFixedLength());
+      OUUIDSerializer.INSTANCE.serialize(uuid, bytes.bytes, uuidOffset);
+    }
+
+    delegate.serialize(bytes, oldUuid, Encoding.Original);
+    return pointer;
+  }
+
+  public int serializeCompact(BytesContainer bytes) {
+
+    checkEmbeddedTreeConvertion();
+
+    final UUID oldUuid = uuid;
+    final OSBTreeCollectionManager sbTreeCollectionManager = ODatabaseRecordThreadLocal.INSTANCE.get().getSbTreeCollectionManager();
+    if (sbTreeCollectionManager != null)
+      uuid = sbTreeCollectionManager.listenForChanges(this);
+    else
+      uuid = null;
+
+    boolean hasUuid = uuid != null;
 
     byte configByte = 0;
     if (isEmbedded())
@@ -262,25 +243,22 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
     if (hasUuid)
       configByte |= 2;
-
-    if (encoding == Encoding.Compact)
-      configByte |= 4;
-
-    stream[offset++] = configByte;
+    int pointer = bytes.alloc(1);
+    bytes.bytes[pointer] = configByte;
 
     if (hasUuid) {
-      OUUIDSerializer.INSTANCE.serialize(uuid, stream, offset);
-      offset += OUUIDSerializer.UUID_SIZE;
+      int uuidOffset = bytes.alloc(OUUIDSerializer.INSTANCE.getFixedLength());
+      OUUIDSerializer.INSTANCE.serialize(uuid, bytes.bytes, uuidOffset);
     }
 
-    delegate.serialize(stream, offset, oldUuid, encoding, bagSerializedSize);
+    delegate.serialize(bytes, oldUuid, Encoding.Compact);
     return pointer;
   }
 
   @Override
   public OStringBuilderSerializable toStream(StringBuilder output) throws OSerializationException {
     final BytesContainer container = new BytesContainer();
-    toStream(container, Encoding.Original);
+    toStream(container);
     output.append(OBase64Utils.encodeBytes(container.bytes, 0, container.offset));
     return this;
   }
@@ -317,10 +295,11 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
       stream.skip(OUUIDSerializer.UUID_SIZE);
     }
 
-    final Encoding encoding = (first & 4) == 0 ? Encoding.Original : Encoding.Compact;
+    final Encoding encoding = Encoding.Original;
 
-    stream.skip(delegate.deserialize(stream.bytes, stream.offset, encoding) - stream.offset);
+    stream.skip(delegate.deserialize(null, encoding) - stream.offset);
   }
+  
 
   @Override
   public void addChangeListener(final OMultiValueChangeListener<OIdentifiable, OIdentifiable> changeListener) {
@@ -361,7 +340,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
    * Notify collection that changes has been saved. Converts to non embedded implementation if needed.
    *
    * WARNING! Method is for internal usage.
-   *
+   * 
    * @param newPointer new collection pointer
    */
   public void notifySaved(OBonsaiCollectionPointer newPointer) {
@@ -430,7 +409,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
   /**
    * Silently replace delegate by tree implementation.
-   *
+   * 
    * @param pointer new collection pointer
    */
   private void replaceWithSBTree(OBonsaiCollectionPointer pointer) {
@@ -465,7 +444,67 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
   @Override
   public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
-    //not needed do nothing
+    // not needed do nothing
+  }
+
+  private void checkEmbeddedTreeConvertion() {
+    final ORecordSerializationContext context = ORecordSerializationContext.getContext();
+    if (context != null) {
+      if (isEmbedded() && ODatabaseRecordThreadLocal.INSTANCE.get().getSbTreeCollectionManager() != null
+          && delegate.size() >= topThreshold) {
+        ORidBagDelegate oldDelegate = delegate;
+        delegate = new OSBTreeRidBag();
+        boolean oldAutoConvert = oldDelegate.isAutoConvertToRecord();
+        oldDelegate.setAutoConvertToRecord(false);
+
+        for (OIdentifiable identifiable : oldDelegate)
+          delegate.add(identifiable);
+
+        final ORecord owner = oldDelegate.getOwner();
+        delegate.setOwner(owner);
+
+        for (OMultiValueChangeListener<OIdentifiable, OIdentifiable> listener : oldDelegate.getChangeListeners())
+          delegate.addChangeListener(listener);
+
+        owner.setDirty();
+
+        oldDelegate.setAutoConvertToRecord(oldAutoConvert);
+        oldDelegate.requestDelete();
+      } else if (bottomThreshold >= 0 && !isEmbedded() && delegate.size() <= bottomThreshold) {
+        ORidBagDelegate oldDelegate = delegate;
+        boolean oldAutoConvert = oldDelegate.isAutoConvertToRecord();
+        oldDelegate.setAutoConvertToRecord(false);
+        delegate = new OEmbeddedRidBag();
+
+        for (OIdentifiable identifiable : oldDelegate)
+          delegate.add(identifiable);
+
+        final ORecord owner = oldDelegate.getOwner();
+        delegate.setOwner(owner);
+
+        for (OMultiValueChangeListener<OIdentifiable, OIdentifiable> listener : oldDelegate.getChangeListeners())
+          delegate.addChangeListener(listener);
+
+        owner.setDirty();
+
+        oldDelegate.setAutoConvertToRecord(oldAutoConvert);
+        oldDelegate.requestDelete();
+      }
+    }
+  }
+
+  public void deserializeCompact(BytesContainer bytes) {
+    final byte first = bytes.bytes[bytes.offset++];
+    if ((first & 1) == 1)
+      delegate = new OEmbeddedRidBag();
+    else
+      delegate = new OSBTreeRidBag();
+
+    if ((first & 2) == 2) {
+      uuid = OUUIDSerializer.INSTANCE.deserialize(bytes.bytes, bytes.offset);
+      bytes.skip(OUUIDSerializer.UUID_SIZE);
+    }
+    delegate.deserialize(bytes, Encoding.Compact);
   }
 
   /**

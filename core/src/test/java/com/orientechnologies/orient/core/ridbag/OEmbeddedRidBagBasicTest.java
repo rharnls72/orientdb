@@ -1,16 +1,17 @@
 package com.orientechnologies.orient.core.ridbag;
 
-import com.orientechnologies.common.serialization.types.OUUIDSerializer;
+import static org.testng.AssertJUnit.assertEquals;
+
+import java.util.UUID;
+
+import org.testng.annotations.Test;
+
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.db.record.ridbag.embedded.OEmbeddedRidBag;
 import com.orientechnologies.orient.core.id.ORecordId;
-import org.testng.annotations.Test;
-
-import java.util.UUID;
-
-import static org.testng.AssertJUnit.assertEquals;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.BytesContainer;
 
 public class OEmbeddedRidBagBasicTest {
 
@@ -24,13 +25,13 @@ public class OEmbeddedRidBagBasicTest {
       bag.add(new ORecordId(3, 1000));
       bag.convertLinks2Records();
       bag.convertRecords2Links();
-      final int bagSerializedSize = bag.getSerializedSize(ORidBag.Encoding.Original);
-      byte[] bytes = new byte[1 + bagSerializedSize + OUUIDSerializer.UUID_SIZE];
+      BytesContainer container = new BytesContainer();
       UUID id = UUID.randomUUID();
-      bag.serialize(bytes, 0, id, ORidBag.Encoding.Original, bagSerializedSize);
+      bag.serialize(container, id, ORidBag.Encoding.Original);
 
+      container.offset = 0;
       OEmbeddedRidBag bag1 = new OEmbeddedRidBag();
-      bag1.deserialize(bytes, 0, ORidBag.Encoding.Original);
+      bag1.deserialize(container, ORidBag.Encoding.Original);
 
       assertEquals(bag.size(), 1);
 

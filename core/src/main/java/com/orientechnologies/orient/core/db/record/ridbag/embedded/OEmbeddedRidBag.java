@@ -19,6 +19,16 @@
  */
 package com.orientechnologies.orient.core.db.record.ridbag.embedded;
 
+import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.UUID;
+
 import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.util.OCommonConst;
 import com.orientechnologies.common.util.OResettable;
@@ -28,32 +38,32 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.OMultiValueChangeEvent;
 import com.orientechnologies.orient.core.db.record.OMultiValueChangeListener;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
+import com.orientechnologies.orient.core.db.record.ridbag.ORidBag.Encoding;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBagDelegate;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OVarLinkSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.BytesContainer;
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSerializer;
 
-import java.nio.ByteBuffer;
-import java.util.*;
-
 public class OEmbeddedRidBag implements ORidBagDelegate {
-  private ORidBag.Encoding encoding          = null;
-  private byte[]           serializedContent = null;
+  private ORidBag.Encoding                                              encoding          = null;
+  private byte[]                                                        serializedContent = null;
 
-  private boolean contentWasChanged = false;
-  private boolean deserialized      = true;
+  private boolean                                                       contentWasChanged = false;
+  private boolean                                                       deserialized      = true;
 
-  private Object[] entries       = OCommonConst.EMPTY_OBJECT_ARRAY;
-  private int      entriesLength = 0;
+  private Object[]                                                      entries           = OCommonConst.EMPTY_OBJECT_ARRAY;
+  private int                                                           entriesLength     = 0;
 
-  private boolean convertToRecord = true;
-  private int     size            = 0;
+  private boolean                                                       convertToRecord   = true;
+  private int                                                           size              = 0;
 
-  private transient ORecord owner;
+  private transient ORecord                                             owner;
 
   private List<OMultiValueChangeListener<OIdentifiable, OIdentifiable>> changeListeners;
 
@@ -63,9 +73,9 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
   private final class EntriesIterator implements Iterator<OIdentifiable>, OResettable, OSizeable {
     private final boolean convertToRecord;
-    private int currentIndex = -1;
-    private int nextIndex    = -1;
-    private boolean currentRemoved;
+    private int           currentIndex = -1;
+    private int           nextIndex    = -1;
+    private boolean       currentRemoved;
 
     private EntriesIterator(boolean convertToRecord) {
       reset();
@@ -74,7 +84,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
     @Override
     public boolean hasNext() {
-      //we may remove items in ridbag during iteration so we need to be sure that pointed item is not removed.
+      // we may remove items in ridbag during iteration so we need to be sure that pointed item is not removed.
       if (nextIndex > -1) {
         if (entries[nextIndex] instanceof OIdentifiable)
           return true;
@@ -95,7 +105,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
       Object nextValue = entries[currentIndex];
 
-      //we may remove items in ridbag during iteration so we need to be sure that pointed item is not removed.
+      // we may remove items in ridbag during iteration so we need to be sure that pointed item is not removed.
       if (!(nextValue instanceof OIdentifiable)) {
         nextIndex = nextIndex();
 
@@ -133,9 +143,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       if (OEmbeddedRidBag.this.owner != null)
         ORecordInternal.unTrack(OEmbeddedRidBag.this.owner, nextValue);
 
-      fireCollectionChangedEvent(
-          new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.REMOVE, nextValue, null,
-              nextValue));
+      fireCollectionChangedEvent(new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.REMOVE,
+          nextValue, null, nextValue));
     }
 
     @Override
@@ -225,9 +234,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     size++;
     contentWasChanged = true;
 
-    fireCollectionChangedEvent(
-        new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.ADD, identifiable,
-            identifiable));
+    fireCollectionChangedEvent(new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.ADD,
+        identifiable, identifiable));
   }
 
   public OEmbeddedRidBag copy() {
@@ -258,9 +266,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       if (this.owner != null)
         ORecordInternal.unTrack(this.owner, identifiable);
 
-      fireCollectionChangedEvent(
-          new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.REMOVE, identifiable, null,
-              identifiable));
+      fireCollectionChangedEvent(new OMultiValueChangeEvent<OIdentifiable, OIdentifiable>(OMultiValueChangeEvent.OChangeType.REMOVE,
+          identifiable, null, identifiable));
     }
   }
 
@@ -420,36 +427,78 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     }
   }
 
-  @Override
-  public int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding) {
+  public int serialize(BytesContainer bytes, UUID ownerUuid, ORidBag.Encoding encoding) {
     switch (encoding) {
-    case Original:
-      return getSerializedSizeOriginal(stream, offset);
+    case Original: {
+      int offset = bytes.alloc(getSerializedSizeOriginal());
+      serializeOriginal(bytes.bytes, offset, ownerUuid);
+      break;
+    }
     case Compact:
-      return getSerializedSizeCompact(ByteBuffer.wrap(stream, offset, stream.length - offset));
+      serializeCompat(bytes, ownerUuid);
+      break;
     default:
       throw new IllegalStateException("unexpected encoding");
     }
+
+    return 0;
   }
 
-  @Override
-  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding, int precomputedSize) {
-    if (!deserialized && encoding != this.encoding)
-      doDeserialization();
+  public int serializeOriginal(byte[] stream, int offset, UUID ownerUuid) {
+    if (!deserialized) {
+      System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
 
-    switch (encoding) {
-    case Original:
-      return serializeOriginal(stream, offset);
-    case Compact:
-      return serializeCompact(stream, offset, precomputedSize);
-    default:
-      throw new IllegalStateException("unexpected encoding");
+      if (contentWasChanged) {
+        OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
+        offset += serializedContent.length;
+      } else {
+        offset += serializedContent.length;
+        return offset;
+      }
+
+    } else {
+      OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
+      offset += OIntegerSerializer.INT_SIZE;
+    }
+
+    for (final Object entry : entries) {
+      if (entry instanceof OIdentifiable) {
+        OIdentifiable link = (OIdentifiable) entry;
+        final ORID rid = link.getIdentity();
+        if (link.getIdentity().isTemporary())
+          link = link.getRecord();
+
+        if (link == null)
+          throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
+
+        OLinkSerializer.INSTANCE.serialize(link, stream, offset);
+        offset += OLinkSerializer.RID_SIZE;
+      }
+    }
+    return offset;
+  }
+
+  public void serializeCompat(BytesContainer bytes, UUID oldUuid) {
+    doDeserialization();
+    OVarIntSerializer.write(bytes, size);
+    final int totEntries = entries.length;
+    for (int i = 0; i < totEntries; ++i) {
+      final Object entry = entries[i];
+      if (entry instanceof OIdentifiable) {
+        OIdentifiable link = (OIdentifiable) entry;
+        final ORID rid = link.getIdentity();
+        if (link.getIdentity().isTemporary())
+          link = link.getRecord();
+
+        if (link == null)
+          throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
+        OVarIntSerializer.write(bytes, link.getIdentity().getClusterId());
+        OVarIntSerializer.write(bytes, link.getIdentity().getClusterPosition());
+      }
     }
   }
 
-  @Override
-  public int deserialize(final byte[] stream, final int offset, ORidBag.Encoding encoding) {
-    this.encoding = encoding;
+  public int deserializeOriginal(final byte[] stream, final int offset) {
 
     final int contentSize;
     switch (encoding) {
@@ -471,6 +520,27 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     deserialized = false;
 
     return offset + contentSize;
+  }
+
+  public void deserializeCompcat(BytesContainer stream) {
+    this.size = (int) OVarIntSerializer.readSignedVarLong(stream);
+    for (int i = 0; i < this.size; i++) {
+      int cluster = (int) OVarIntSerializer.readSignedVarLong(stream);
+      long position = OVarIntSerializer.readSignedVarLong(stream);
+      addEntry(new ORecordId(cluster, position));
+    }
+    deserialized = true;
+  }
+
+  @Override
+  public int deserialize(BytesContainer bytes, ORidBag.Encoding encoding) {
+    this.encoding = encoding;
+    if (encoding == Encoding.Original) {
+      bytes.skip(deserializeOriginal(bytes.bytes, bytes.offset));
+    } else {
+      deserializeCompcat(bytes);
+    }
+    return 0;
   }
 
   @Override
@@ -547,10 +617,6 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     deserialized = true;
   }
 
-  @Override
-  public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
-    //do nothing not needed
-  }
 
   private int getSerializedSizeOriginal() {
     int size;
@@ -595,85 +661,13 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
         final int newByteSize = oldByteSize + byteSizeDelta;
         final int newSize = size;
 
-        return newByteSize + (OVarIntSerializer.sizeOfUnsigned(newByteSize) - OVarIntSerializer.sizeOfUnsigned(oldByteSize)) + (
-            OVarIntSerializer.sizeOfUnsigned(newSize) - OVarIntSerializer.sizeOfUnsigned(oldSize));
+        return newByteSize + (OVarIntSerializer.sizeOfUnsigned(newByteSize) - OVarIntSerializer.sizeOfUnsigned(oldByteSize))
+            + (OVarIntSerializer.sizeOfUnsigned(newSize) - OVarIntSerializer.sizeOfUnsigned(oldSize));
       } else
         return serializedContent.length;
     }
   }
 
-  private int serializeOriginal(byte[] stream, int offset) {
-    if (!deserialized) {
-      System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
-
-      if (contentWasChanged) {
-        OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
-        offset += serializedContent.length;
-      } else {
-        offset += serializedContent.length;
-        return offset;
-      }
-    } else {
-      OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
-      offset += OIntegerSerializer.INT_SIZE;
-    }
-
-    for (final Object entry : entries) {
-      final OIdentifiable identifiable = resolveEntry(entry);
-      if (identifiable != null) {
-        OLinkSerializer.INSTANCE.serialize(identifiable, stream, offset);
-        offset += OLinkSerializer.RID_SIZE;
-      }
-    }
-
-    return offset;
-  }
-
-  private int serializeCompact(byte[] stream, int offset, int precomputedSize) {
-    if (deserialized) {
-      final ByteBuffer buffer = ByteBuffer.wrap(stream, offset, stream.length - offset);
-
-      OVarIntSerializer.writeUnsigned(precomputedSize, buffer);
-      OVarIntSerializer.writeUnsigned(size, buffer);
-
-      for (final Object entry : entries) {
-        final OIdentifiable identifiable = resolveEntry(entry);
-        if (identifiable != null)
-          OVarLinkSerializer.INSTANCE.serializeInByteBufferObject(identifiable, buffer);
-      }
-
-      return offset + precomputedSize;
-    } else {
-      if (contentWasChanged) {
-        // If it's not deserialized while the content is changed when there were only additions performed. The size may only grow.
-
-        final ByteBuffer oldBuffer = ByteBuffer.wrap(serializedContent);
-        final int oldByteSize = OVarIntSerializer.readUnsignedInteger(oldBuffer);
-        assert oldByteSize == serializedContent.length;
-        final int oldSize = OVarIntSerializer.readUnsignedInteger(oldBuffer);
-
-        @SuppressWarnings("UnnecessaryLocalVariable") final int newByteSize = precomputedSize;
-        final int newSize = size;
-        final int oldDataOffset = OVarIntSerializer.sizeOfUnsigned(oldByteSize) + OVarIntSerializer.sizeOfUnsigned(oldSize);
-
-        final ByteBuffer newBuffer = ByteBuffer.wrap(stream, offset, newByteSize);
-        OVarIntSerializer.writeUnsigned(newByteSize, newBuffer);
-        OVarIntSerializer.writeUnsigned(newSize, newBuffer);
-        newBuffer.put(serializedContent, oldDataOffset, oldByteSize - oldDataOffset);
-
-        for (Object entry : entries) {
-          final OIdentifiable identifiable = resolveEntry(entry);
-          if (identifiable != null)
-            OVarLinkSerializer.INSTANCE.serializeInByteBufferObject(identifiable, newBuffer);
-        }
-
-        return offset + newByteSize;
-      } else {
-        System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
-        return offset + serializedContent.length;
-      }
-    }
-  }
 
   private int getSerializedSizeOriginal(byte[] stream, int offset) {
     return OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset) * OLinkSerializer.RID_SIZE + OIntegerSerializer.INT_SIZE;
@@ -725,6 +719,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     }
   }
 
+
   private static OIdentifiable resolveEntry(Object entry) {
     if (!(entry instanceof OIdentifiable))
       return null; // tombstone or empty slot
@@ -738,6 +733,11 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
 
     return identifiable;
+  }
+  
+  @Override
+  public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
+    // do nothing not needed
   }
 
 }

@@ -29,9 +29,10 @@ import com.orientechnologies.orient.core.db.record.OMultiValueChangeListener;
 import com.orientechnologies.orient.core.db.record.ORecordLazyMultiValue;
 import com.orientechnologies.orient.core.db.record.OTrackedMultiValue;
 import com.orientechnologies.orient.core.record.ORecord;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.BytesContainer;
 
-public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMultiValue,
-    OTrackedMultiValue<OIdentifiable, OIdentifiable> {
+public interface ORidBagDelegate
+    extends Iterable<OIdentifiable>, ORecordLazyMultiValue, OTrackedMultiValue<OIdentifiable, OIdentifiable> {
   void addAll(Collection<OIdentifiable> values);
 
   void add(OIdentifiable identifiable);
@@ -42,36 +43,29 @@ public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMul
 
   int getSerializedSize(ORidBag.Encoding encoding);
 
-  int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding);
-
   /**
    * Writes content of bag to stream.
    * 
    * OwnerUuid is needed to notify db about changes of collection pointer if some happens during serialization.
    * 
-   * @param stream
-   *          to write content
-   * @param offset
-   *          in stream where start to write content
-   * @param ownerUuid
-   *          id of delegate owner
-   * @param encoding
-   *          the required encoding
-   * @param precomputedSize
-   *          the precomputed serialized size to avoid double calculation of it
+   * @param bytes TODO
+   * @param ownerUuid id of delegate owner
+   * 
+   * @param bytes where to write content
+   * @param ownerUuid id of delegate owner
+   * @param encoding the required encoding
    * @return offset where content of stream is ended
    */
-  int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding, int precomputedSize);
+  int serialize(BytesContainer bytes, UUID ownerUuid, ORidBag.Encoding encoding);
 
-  int deserialize(byte[] stream, int offset, ORidBag.Encoding encoding);
+  int deserialize(BytesContainer bytes, ORidBag.Encoding encoding);
 
   void requestDelete();
 
   /**
    * THIS IS VERY EXPENSIVE METHOD AND CAN NOT BE CALLED IN REMOTE STORAGE.
    *
-   * @param identifiable
-   *          Object to check.
+   * @param identifiable Object to check.
    * @return true if ridbag contains at leas one instance with the same rid as passed in identifiable.
    */
   boolean contains(OIdentifiable identifiable);
@@ -83,4 +77,5 @@ public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMul
   public String toString();
 
   public List<OMultiValueChangeListener<OIdentifiable, OIdentifiable>> getChangeListeners();
+
 }

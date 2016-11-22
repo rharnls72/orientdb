@@ -524,7 +524,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     bytes.bytes[pos] = (byte) type.getId();
   }
 
-  private static byte[] readBinary(final BytesContainer bytes) {
+  protected static byte[] readBinary(final BytesContainer bytes) {
     final int n = OVarIntSerializer.readAsInteger(bytes);
     final byte[] newValue = new byte[n];
     System.arraycopy(bytes.bytes, bytes.offset, newValue, 0, newValue.length);
@@ -532,7 +532,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return newValue;
   }
 
-  private Map<Object, OIdentifiable> readLinkMap(final BytesContainer bytes, final ODocument document) {
+  protected Map<Object, OIdentifiable> readLinkMap(final BytesContainer bytes, final ODocument document) {
     int size = OVarIntSerializer.readAsInteger(bytes);
     final ORecordLazyMap result = new ORecordLazyMap(document);
 
@@ -555,7 +555,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     }
   }
 
-  private Object readEmbeddedMap(final BytesContainer bytes, final ODocument document) {
+  protected Object readEmbeddedMap(final BytesContainer bytes, final ODocument document) {
     int size = OVarIntSerializer.readAsInteger(bytes);
     final OTrackedMap<Object> result = new OTrackedMap<Object>(document);
 
@@ -588,7 +588,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     }
   }
 
-  private Collection<OIdentifiable> readLinkCollection(final BytesContainer bytes, final Collection<OIdentifiable> found) {
+  protected Collection<OIdentifiable> readLinkCollection(final BytesContainer bytes, final Collection<OIdentifiable> found) {
     final int items = OVarIntSerializer.readAsInteger(bytes);
     for (int i = 0; i < items; i++) {
       ORecordId id = readOptimizedLink(bytes);
@@ -604,7 +604,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return new ORecordId(OVarIntSerializer.readAsInteger(bytes), OVarIntSerializer.readAsLong(bytes));
   }
 
-  private Collection<?> readEmbeddedSet(final BytesContainer bytes, final ODocument ownerDocument) {
+  protected Collection<?> readEmbeddedSet(final BytesContainer bytes, final ODocument ownerDocument) {
 
     final int items = OVarIntSerializer.readAsInteger(bytes);
     OType type = readOType(bytes);
@@ -632,7 +632,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return null;
   }
 
-  private Collection<?> readEmbeddedList(final BytesContainer bytes, final ODocument ownerDocument) {
+  protected Collection<?> readEmbeddedList(final BytesContainer bytes, final ODocument ownerDocument) {
 
     final int items = OVarIntSerializer.readAsInteger(bytes);
     OType type = readOType(bytes);
@@ -761,7 +761,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
       pointer = writeEmbeddedMap(bytes, (Map<Object, Object>) value);
       break;
     case LINKBAG:
-      pointer = ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Original);
+      pointer = ((ORidBag) value).toStream(bytes);
       break;
     case CUSTOM:
       if (!(value instanceof OSerializableStream))
@@ -777,14 +777,14 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return pointer;
   }
 
-  private int writeBinary(final BytesContainer bytes, final byte[] valueBytes) {
+  protected int writeBinary(final BytesContainer bytes, final byte[] valueBytes) {
     final int pointer = OVarIntSerializer.write(bytes, valueBytes.length);
     final int start = bytes.alloc(valueBytes.length);
     System.arraycopy(valueBytes, 0, bytes.bytes, start, valueBytes.length);
     return pointer;
   }
 
-  private int writeLinkMap(final BytesContainer bytes, final Map<Object, OIdentifiable> map) {
+  protected int writeLinkMap(final BytesContainer bytes, final Map<Object, OIdentifiable> map) {
     final boolean disabledAutoConversion = map instanceof ORecordLazyMultiValue
         && ((ORecordLazyMultiValue) map).isAutoConvertToRecord();
 
@@ -814,7 +814,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
   }
 
   @SuppressWarnings("unchecked")
-  private int writeEmbeddedMap(BytesContainer bytes, Map<Object, Object> map) {
+  protected int writeEmbeddedMap(BytesContainer bytes, Map<Object, Object> map) {
     final int[] pos = new int[map.size()];
     int i = 0;
     Entry<Object, Object> values[] = new Entry[map.size()];
@@ -854,7 +854,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
 
   }
 
-  private int writeOptimizedLink(final BytesContainer bytes, OIdentifiable link) {
+  protected int writeOptimizedLink(final BytesContainer bytes, OIdentifiable link) {
     if (!link.getIdentity().isPersistent()) {
       try {
         final ORecord real = link.getRecord();
@@ -872,7 +872,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return pos;
   }
 
-  private int writeLinkCollection(final BytesContainer bytes, final Collection<OIdentifiable> value) {
+  protected int writeLinkCollection(final BytesContainer bytes, final Collection<OIdentifiable> value) {
     final int pos = OVarIntSerializer.write(bytes, value.size());
 
     final boolean disabledAutoConversion = value instanceof ORecordLazyMultiValue
@@ -899,7 +899,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return pos;
   }
 
-  private int writeEmbeddedCollection(final BytesContainer bytes, final Collection<?> value, final OType linkedType) {
+  protected int writeEmbeddedCollection(final BytesContainer bytes, final Collection<?> value, final OType linkedType) {
     final int pos = OVarIntSerializer.write(bytes, value.size());
     // TODO manage embedded type from schema and auto-determined.
     writeOType(bytes, bytes.alloc(1), OType.ANY);
@@ -972,7 +972,7 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     return OVarIntSerializer.write(bytes, 0);
   }
 
-  private int writeString(final BytesContainer bytes, final String toWrite) {
+  protected int writeString(final BytesContainer bytes, final String toWrite) {
     final byte[] nameBytes = bytesFromString(toWrite);
     final int pointer = OVarIntSerializer.write(bytes, nameBytes.length);
     final int start = bytes.alloc(nameBytes.length);
