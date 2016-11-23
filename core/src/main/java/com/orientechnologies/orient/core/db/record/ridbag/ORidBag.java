@@ -48,7 +48,7 @@ import java.util.UUID;
 /**
  * A collection that contain links to {@link OIdentifiable}. Bag is similar to set but can contain several entering of the same
  * object.<br>
- * 
+ *
  * Could be tree based and embedded representation.<br>
  * <ul>
  * <li>
@@ -70,7 +70,7 @@ import java.util.UUID;
  * <br>
  * Does not implement {@link Collection} interface because some operations could not be efficiently implemented and that's why
  * should be avoided.<br>
- * 
+ *
  * @author Artem Orobets (enisher-at-gmail.com)
  * @author Andrey Lomakin
  * @since 1.7rc1
@@ -79,10 +79,10 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     OTrackedMultiValue<OIdentifiable, OIdentifiable>, OCollection<OIdentifiable> {
   private ORidBagDelegate delegate;
 
-  private int             topThreshold    = OGlobalConfiguration.RID_BAG_EMBEDDED_TO_SBTREEBONSAI_THRESHOLD.getValueAsInteger();
-  private int             bottomThreshold = OGlobalConfiguration.RID_BAG_SBTREEBONSAI_TO_EMBEDDED_THRESHOLD.getValueAsInteger();
+  private int topThreshold    = OGlobalConfiguration.RID_BAG_EMBEDDED_TO_SBTREEBONSAI_THRESHOLD.getValueAsInteger();
+  private int bottomThreshold = OGlobalConfiguration.RID_BAG_SBTREEBONSAI_TO_EMBEDDED_THRESHOLD.getValueAsInteger();
 
-  private UUID            uuid;
+  private UUID uuid;
 
   public ORidBag(final ORidBag ridBag) {
     init();
@@ -127,8 +127,8 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
   /**
    * THIS IS VERY EXPENSIVE METHOD AND CAN NOT BE CALLED IN REMOTE STORAGE.
    *
-   * @param identifiable
-   *          Object to check.
+   * @param identifiable Object to check.
+   *
    * @return true if ridbag contains at leas one instance with the same rid as passed in identifiable.
    */
   public boolean contains(OIdentifiable identifiable) {
@@ -195,7 +195,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     return delegate instanceof OEmbeddedRidBag;
   }
 
-  public int toStream(BytesContainer bytesContainer) throws OSerializationException {
+  public int toStream(BytesContainer bytesContainer, Encoding encoding) throws OSerializationException {
 
     final ORecordSerializationContext context = ORecordSerializationContext.getContext();
     if (context != null) {
@@ -250,8 +250,8 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
     boolean hasUuid = uuid != null;
 
-    final int serializedSize = OByteSerializer.BYTE_SIZE + delegate.getSerializedSize()
-        + ((hasUuid) ? OUUIDSerializer.UUID_SIZE : 0);
+    final int serializedSize =
+        OByteSerializer.BYTE_SIZE + delegate.getSerializedSize(encoding) + ((hasUuid) ? OUUIDSerializer.UUID_SIZE : 0);
     int pointer = bytesContainer.alloc(serializedSize);
     int offset = pointer;
     final byte[] stream = bytesContainer.bytes;
@@ -263,6 +263,9 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     if (hasUuid)
       configByte |= 2;
 
+    if (encoding == Encoding.Optimized)
+      configByte |= 4;
+
     stream[offset++] = configByte;
 
     if (hasUuid) {
@@ -270,14 +273,14 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
       offset += OUUIDSerializer.UUID_SIZE;
     }
 
-    delegate.serialize(stream, offset, oldUuid);
+    delegate.serialize(stream, offset, oldUuid, encoding);
     return pointer;
   }
 
   @Override
   public OStringBuilderSerializable toStream(StringBuilder output) throws OSerializationException {
     final BytesContainer container = new BytesContainer();
-    toStream(container);
+    toStream(container, Encoding.Legacy);
     output.append(OBase64Utils.encodeBytes(container.bytes, 0, container.offset));
     return this;
   }
@@ -314,7 +317,9 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
       stream.skip(OUUIDSerializer.UUID_SIZE);
     }
 
-    stream.skip(delegate.deserialize(stream.bytes, stream.offset) - stream.offset);
+    final Encoding encoding = (first & 4) == 0 ? Encoding.Legacy : Encoding.Optimized;
+
+    stream.skip(delegate.deserialize(stream.bytes, stream.offset, encoding) - stream.offset);
   }
 
   @Override
@@ -343,9 +348,9 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
   /**
    * Temporary id of collection to track changes in remote mode.
-   * 
+   *
    * WARNING! Method is for internal usage.
-   * 
+   *
    * @return UUID
    */
   public UUID getTemporaryId() {
@@ -354,11 +359,10 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
   /**
    * Notify collection that changes has been saved. Converts to non embedded implementation if needed.
-   * 
+   *
    * WARNING! Method is for internal usage.
-   * 
-   * @param newPointer
-   *          new collection pointer
+   *
+   * @param newPointer new collection pointer
    */
   public void notifySaved(OBonsaiCollectionPointer newPointer) {
     if (newPointer.isValid()) {
@@ -426,9 +430,8 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
   /**
    * Silently replace delegate by tree implementation.
-   * 
-   * @param pointer
-   *          new collection pointer
+   *
+   * @param pointer new collection pointer
    */
   private void replaceWithSBTree(OBonsaiCollectionPointer pointer) {
     delegate.requestDelete();
@@ -463,5 +466,9 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
   @Override
   public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
     //not needed do nothing
+  }
+
+  public enum Encoding {
+    Legacy, Optimized
   }
 }

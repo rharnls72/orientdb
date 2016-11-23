@@ -20,8 +20,20 @@
 
 package com.orientechnologies.orient.core.serialization.serializer.record.binary;
 
+import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
+import com.orientechnologies.orient.core.metadata.schema.OType;
+
 /**
  * @author Sergey Sitnikov
  */
 public class ORecordSerializerBinaryV1 extends ORecordSerializerBinaryV0 {
+
+  @Override
+  public int serializeValue(BytesContainer bytes, Object value, OType type, OType linkedType) {
+    if (type == OType.LINKBAG)
+      return ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Optimized);
+
+    return super.serializeValue(bytes, value, type, linkedType);
+  }
+
 }

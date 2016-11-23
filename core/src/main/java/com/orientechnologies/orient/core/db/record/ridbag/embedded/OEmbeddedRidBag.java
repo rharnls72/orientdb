@@ -28,6 +28,7 @@ import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.OMultiValueChangeEvent;
 import com.orientechnologies.orient.core.db.record.OMultiValueChangeListener;
+import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBagDelegate;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.id.ORID;
@@ -53,7 +54,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
   private List<OMultiValueChangeListener<OIdentifiable, OIdentifiable>> changeListeners;
 
-  private static enum Tombstone {
+  private enum Tombstone {
     TOMBSTONE
   }
 
@@ -402,7 +403,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int getSerializedSize() {
+  public int getSerializedSize(ORidBag.Encoding encoding) {
     int size;
 
     if (!deserialized)
@@ -416,12 +417,12 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int getSerializedSize(byte[] stream, int offset) {
+  public int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding) {
     return OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset) * OLinkSerializer.RID_SIZE + OIntegerSerializer.INT_SIZE;
   }
 
   @Override
-  public int serialize(byte[] stream, int offset, UUID ownerUuid) {
+  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding) {
     if (!deserialized) {
       System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
 
@@ -447,8 +448,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
         if (link.getIdentity().isTemporary())
           link = link.getRecord();
 
-        if( link == null )
-          throw new OSerializationException("Found null entry in ridbag with rid="+rid);
+        if (link == null)
+          throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
 
         OLinkSerializer.INSTANCE.serialize(link, stream, offset);
         offset += OLinkSerializer.RID_SIZE;
@@ -459,8 +460,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int deserialize(final byte[] stream, final int offset) {
-    final int contentSize = getSerializedSize(stream, offset);
+  public int deserialize(final byte[] stream, final int offset, ORidBag.Encoding encoding) {
+    final int contentSize = getSerializedSize(stream, offset, encoding);
 
     this.size = OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset);
 
@@ -546,7 +547,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       if (identifiable == null)
         identifiable = rid;
 
-      if( identifiable == null )
+      if (identifiable == null)
         OLogManager.instance().warn(this, "Found null reference during ridbag deserialization (rid=%s)", rid);
       else
         addEntry(identifiable);

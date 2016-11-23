@@ -2,6 +2,7 @@ package com.orientechnologies.orient.core.ridbag;
 
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
+import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.db.record.ridbag.embedded.OEmbeddedRidBag;
 import com.orientechnologies.orient.core.id.ORecordId;
 import org.testng.annotations.Test;
@@ -24,10 +25,10 @@ public class OEmbeddedRidBagBasicTest {
       bag.convertRecords2Links();
       byte[] bytes = new byte[1024];
       UUID id = UUID.randomUUID();
-      bag.serialize(bytes, 0, id);
+      bag.serialize(bytes, 0, id, ORidBag.Encoding.Legacy);
 
       OEmbeddedRidBag bag1 = new OEmbeddedRidBag();
-      bag1.deserialize(bytes, 0);
+      bag1.deserialize(bytes, 0, ORidBag.Encoding.Legacy);
 
       assertEquals(bag.size(), 1);
 

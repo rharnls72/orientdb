@@ -29,6 +29,7 @@ import com.orientechnologies.common.util.OResettable;
 import com.orientechnologies.common.util.OSizeable;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.*;
+import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBagDelegate;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -71,8 +72,8 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   private transient ORecord                                                       owner;
   private boolean updateOwner = true;
 
-  public static interface Change {
-    public static final int SIZE = OByteSerializer.BYTE_SIZE + OIntegerSerializer.INT_SIZE;
+  public interface Change {
+    int SIZE = OByteSerializer.BYTE_SIZE + OIntegerSerializer.INT_SIZE;
 
     void increment();
 
@@ -801,7 +802,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int getSerializedSize() {
+  public int getSerializedSize(ORidBag.Encoding encoding) {
     int result = 2 * OLongSerializer.LONG_SIZE + 3 * OIntegerSerializer.INT_SIZE;
     if (ODatabaseRecordThreadLocal.INSTANCE.get().getStorage() instanceof OStorageProxy
         || ORecordSerializationContext.getContext() == null)
@@ -810,12 +811,12 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int getSerializedSize(byte[] stream, int offset) {
-    return getSerializedSize();
+  public int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding) {
+    return getSerializedSize(encoding);
   }
 
   @Override
-  public int serialize(byte[] stream, int offset, UUID ownerUuid) {
+  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding) {
     for (Map.Entry<OIdentifiable, OModifiableInteger> entry : newEntries.entrySet()) {
       OIdentifiable identifiable = entry.getKey();
       assert identifiable instanceof ORecord;
@@ -902,7 +903,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int deserialize(byte[] stream, int offset) {
+  public int deserialize(byte[] stream, int offset, ORidBag.Encoding encoding) {
     final long fileId = OLongSerializer.INSTANCE.deserializeLiteral(stream, offset);
     offset += OLongSerializer.LONG_SIZE;
 
@@ -1048,6 +1049,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
    * Removes entry with given key from {@link #newEntries}.
    *
    * @param identifiable key to remove
+   *
    * @return true if entry have been removed
    */
   private boolean removeFromNewEntries(final OIdentifiable identifiable) {

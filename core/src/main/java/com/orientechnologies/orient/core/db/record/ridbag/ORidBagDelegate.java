@@ -40,9 +40,9 @@ public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMul
 
   boolean isEmpty();
 
-  int getSerializedSize();
+  int getSerializedSize(ORidBag.Encoding encoding);
 
-  int getSerializedSize(byte[] stream, int offset);
+  int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding);
 
   /**
    * Writes content of bag to stream.
@@ -57,9 +57,9 @@ public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMul
    *          id of delegate owner
    * @return offset where content of stream is ended
    */
-  int serialize(byte[] stream, int offset, UUID ownerUuid);
+  int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding);
 
-  int deserialize(byte[] stream, int offset);
+  int deserialize(byte[] stream, int offset, ORidBag.Encoding encoding);
 
   void requestDelete();
 
