@@ -417,7 +417,6 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
       byte[] serializedValue = new byte[valueSize];
       valueSerializer.serializeNativeObject(treeEntry.value, serializedValue, 0);
       setBinaryValue(offset + freePointer, serializedValue);
-
     } else {
       setBucketPointer(offset + freePointer, treeEntry.leftChild);
       freePointer += pointerSize;
