@@ -455,10 +455,10 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     final int oldSize = getObjectSizeInDirectMemory(valueSerializer, offset + entryPosition);
     final int newSize = valueSerializer.getObjectSize(value);
 
-    checkEntreeSize(keySize + newSize);
-
-    if (oldSize != newSize)
+    if (oldSize != newSize) {
+      checkEntreeSize(keySize + newSize);
       return UPDATE_REINSERT;
+    }
 
     final byte[] oldBytes = getBinaryValue(offset + entryPosition, oldSize);
     final byte[] newBytes = new byte[newSize];
