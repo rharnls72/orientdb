@@ -554,24 +554,27 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
   private int getPosition(int index) {
     return version >= VERSION_2 ?
-        getShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE) :
+        getShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE) & 0xFFFF :
         getIntValue(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE);
   }
 
   private int setPosition(int index, int position) {
-    return version >= VERSION_2 ?
-        setShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE, (short) position) :
-        setIntValue(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE, position);
+    if (version >= VERSION_2) {
+      assert position >= 0 && position <= 0xFFFF;
+      return setShortValue(offset + POSITIONS_ARRAY_OFFSET + index * OShortSerializer.SHORT_SIZE, (short) position);
+    } else
+      return setIntValue(offset + POSITIONS_ARRAY_OFFSET + index * OIntegerSerializer.INT_SIZE, position);
   }
 
   private int readPosition(int offset) {
-    return version >= VERSION_2 ? getShortValue(offset) : getIntValue(offset);
+    return version >= VERSION_2 ? getShortValue(offset) & 0xFFFF : getIntValue(offset);
   }
 
   private void writePosition(int offset, int position) {
-    if (version >= VERSION_2)
+    if (version >= VERSION_2) {
+      assert position >= 0 && position <= 0xFFFF;
       setShortValue(offset, (short) position);
-    else
+    } else
       setIntValue(offset, position);
   }
 
@@ -602,7 +605,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   }
 
   private static byte encodeVersion(byte flags, byte version) {
-    assert version < 16 && version >= 0;
+    assert version >= 0 && version < 16;
     return (byte) ((version << VERSION_SHIFT & VERSION_MASK) | (flags & ~VERSION_MASK));
   }
 
