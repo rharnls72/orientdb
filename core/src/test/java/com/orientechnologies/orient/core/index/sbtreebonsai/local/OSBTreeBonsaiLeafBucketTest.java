@@ -130,7 +130,7 @@ public class OSBTreeBonsaiLeafBucketTest {
 
     final Set<Integer> updated = new HashSet<Integer>();
     for (int i = 0; i < treeBucket.size(); i++)
-      if (treeBucket.updateValue(i, new ORecordId(i + 5, i + 5)) == OSBTreeBonsaiBucket.UPDATE_UPDATED)
+      if (treeBucket.updateValue(i, new ORecordId(i + 5, i + 5)) == OSBTreeBonsaiBucket.UpdateResult.Updated)
         updated.add(i);
 
     for (Map.Entry<Long, Integer> keyIndexEntry : keyIndexMap.entrySet()) {

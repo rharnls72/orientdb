@@ -261,17 +261,17 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
         int insertionIndex;
 
         if (itemFound) {
-          final int updateResult = keyBucket.updateValue(bucketSearchResult.itemIndex, value);
+          final OSBTreeBonsaiBucket.UpdateResult updateResult = keyBucket.updateValue(bucketSearchResult.itemIndex, value);
           switch (updateResult) {
-          case OSBTreeBonsaiBucket.UPDATE_NO_CHANGE:
+          case NoChange:
             insertionIndex = -1;
             result = false;
             break;
-          case OSBTreeBonsaiBucket.UPDATE_UPDATED:
+          case Updated:
             insertionIndex = -1;
             result = true;
             break;
-          case OSBTreeBonsaiBucket.UPDATE_REINSERT:
+          case Reinsert:
             keyBucket.remove(bucketSearchResult.itemIndex);
             insertionIndex = bucketSearchResult.itemIndex;
             result = true;

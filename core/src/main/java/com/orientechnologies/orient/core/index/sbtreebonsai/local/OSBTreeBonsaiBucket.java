@@ -45,21 +45,25 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
   public static final int MAX_BUCKET_SIZE_BYTES = OGlobalConfiguration.SBTREEBONSAI_BUCKET_SIZE.getValueAsInteger() * 1024;
 
   /**
-   * The result of {@link #updateValue(int, Object)} call, indicates that the new value passed is identical to the stored one.
+   * The possible results of {@link #updateValue(int, Object)} call.
    */
-  public static final int UPDATE_NO_CHANGE = 0;
+  public enum UpdateResult {
+    /**
+     * Indicates that the new value passed is identical to the stored one, no update was performed.
+     */
+    NoChange,
 
-  /**
-   * The result of {@link #updateValue(int, Object)} call, indicates that the stored value was updated.
-   */
-  public static final int UPDATE_UPDATED = 1;
+    /**
+     * Indicates that the stored value was updated.
+     */
+    Updated,
 
-  /**
-   * The result of {@link #updateValue(int, Object)} call, indicates that the new value is of a different size than the stored one
-   * and it's not updated. For example, the caller may handle this situation by removing the key and inserting it back with the new
-   * value.
-   */
-  public static final int UPDATE_REINSERT = 2;
+    /**
+     * Indicates that the new value is of a different size than the stored one and it's not updated. For example, the caller may
+     * handle this situation by removing the key and inserting it back with the new value.
+     */
+    Reinsert
+  }
 
   private static final Comparator<byte[]> BYTE_ARRAY_COMPARATOR = OComparatorFactory.INSTANCE.getComparator(byte[].class);
 
@@ -446,7 +450,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     return true;
   }
 
-  public int updateValue(int index, V value) throws IOException {
+  public UpdateResult updateValue(int index, V value) throws IOException {
     int entryPosition = getPosition(index);
     final int keySize = getObjectSizeInDirectMemory(keySerializer, offset + entryPosition);
     entryPosition += keySize;
@@ -456,7 +460,7 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
 
     if (oldSize != newSize) {
       checkEntreeSize(keySize + newSize);
-      return UPDATE_REINSERT;
+      return UpdateResult.Reinsert;
     }
 
     final byte[] oldBytes = getBinaryValue(offset + entryPosition, oldSize);
@@ -464,10 +468,10 @@ public class OSBTreeBonsaiBucket<K, V> extends OBonsaiBucketAbstract {
     valueSerializer.serializeNativeObject(value, newBytes, 0);
 
     if (BYTE_ARRAY_COMPARATOR.compare(oldBytes, newBytes) == 0)
-      return UPDATE_NO_CHANGE;
+      return UpdateResult.NoChange;
 
     setBinaryValue(offset + entryPosition, newBytes);
-    return UPDATE_UPDATED;
+    return UpdateResult.Updated;
   }
 
   public OBonsaiBucketPointer getFreeListPointer() {
