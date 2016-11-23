@@ -31,7 +31,7 @@ public class ORecordSerializerBinaryV1 extends ORecordSerializerBinaryV0 {
   @Override
   public int serializeValue(BytesContainer bytes, Object value, OType type, OType linkedType) {
     if (type == OType.LINKBAG)
-      return ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Optimized);
+      return ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Compact);
 
     return super.serializeValue(bytes, value, type, linkedType);
   }

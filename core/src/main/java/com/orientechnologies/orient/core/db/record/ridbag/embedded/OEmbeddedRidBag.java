@@ -19,7 +19,6 @@
  */
 package com.orientechnologies.orient.core.db.record.ridbag.embedded;
 
-import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.util.OCommonConst;
 import com.orientechnologies.common.util.OResettable;
@@ -39,7 +38,8 @@ import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OL
 import java.util.*;
 
 public class OEmbeddedRidBag implements ORidBagDelegate {
-  private byte[] serializedContent = null;
+  private ORidBag.Encoding encoding          = null;
+  private byte[]           serializedContent = null;
 
   private boolean contentWasChanged = false;
   private boolean deserialized      = true;
@@ -213,7 +213,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public void add(final OIdentifiable identifiable) {
+  public void add(@SuppressWarnings("ConstantConditions") final OIdentifiable identifiable) {
     if (identifiable == null)
       throw new NullPointerException("Impossible to add a null identifiable in a ridbag");
 
@@ -229,6 +229,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
   public OEmbeddedRidBag copy() {
     final OEmbeddedRidBag copy = new OEmbeddedRidBag();
+    copy.encoding = encoding;
     copy.serializedContent = serializedContent;
     copy.contentWasChanged = contentWasChanged;
     copy.deserialized = deserialized;
@@ -346,14 +347,13 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     if (size < 10) {
       final StringBuilder sb = new StringBuilder(256);
       sb.append('[');
-      for (final Iterator<OIdentifiable> it = this.iterator(); it.hasNext(); ) {
+      for (OIdentifiable identifiable : this) {
         try {
-          OIdentifiable e = it.next();
-          if (e != null) {
+          if (identifiable != null) {
             if (sb.length() > 1)
               sb.append(", ");
 
-            sb.append(e.getIdentity());
+            sb.append(identifiable.getIdentity());
           }
         } catch (NoSuchElementException ex) {
           // IGNORE THIS
@@ -439,9 +439,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       offset += OIntegerSerializer.INT_SIZE;
     }
 
-    final int totEntries = entries.length;
-    for (int i = 0; i < totEntries; ++i) {
-      final Object entry = entries[i];
+    for (final Object entry : entries) {
       if (entry instanceof OIdentifiable) {
         OIdentifiable link = (OIdentifiable) entry;
         final ORID rid = link.getIdentity();
@@ -461,6 +459,8 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
   @Override
   public int deserialize(final byte[] stream, final int offset, ORidBag.Encoding encoding) {
+    this.encoding = encoding;
+
     final int contentSize = getSerializedSize(stream, offset, encoding);
 
     this.size = OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset);
@@ -547,10 +547,7 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
       if (identifiable == null)
         identifiable = rid;
 
-      if (identifiable == null)
-        OLogManager.instance().warn(this, "Found null reference during ridbag deserialization (rid=%s)", rid);
-      else
-        addEntry(identifiable);
+      addEntry(identifiable);
     }
 
     deserialized = true;

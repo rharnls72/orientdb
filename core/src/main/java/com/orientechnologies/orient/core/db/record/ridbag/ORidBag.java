@@ -263,7 +263,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     if (hasUuid)
       configByte |= 2;
 
-    if (encoding == Encoding.Optimized)
+    if (encoding == Encoding.Compact)
       configByte |= 4;
 
     stream[offset++] = configByte;
@@ -280,7 +280,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
   @Override
   public OStringBuilderSerializable toStream(StringBuilder output) throws OSerializationException {
     final BytesContainer container = new BytesContainer();
-    toStream(container, Encoding.Legacy);
+    toStream(container, Encoding.Original);
     output.append(OBase64Utils.encodeBytes(container.bytes, 0, container.offset));
     return this;
   }
@@ -317,7 +317,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
       stream.skip(OUUIDSerializer.UUID_SIZE);
     }
 
-    final Encoding encoding = (first & 4) == 0 ? Encoding.Legacy : Encoding.Optimized;
+    final Encoding encoding = (first & 4) == 0 ? Encoding.Original : Encoding.Compact;
 
     stream.skip(delegate.deserialize(stream.bytes, stream.offset, encoding) - stream.offset);
   }
@@ -468,7 +468,19 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
     //not needed do nothing
   }
 
+  /**
+   * Enums RID Bag encodings.
+   */
   public enum Encoding {
-    Legacy, Optimized
+    /**
+     * Original encoding used before 2.2.? version. todo
+     */
+    Original,
+
+    /**
+     * More compact encoding, utilizes var-int aka base128 encoded integers. Introduced in 2.2.? version. todo
+     */
+    Compact
   }
+
 }

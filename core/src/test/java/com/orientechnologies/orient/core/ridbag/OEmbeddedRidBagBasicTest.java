@@ -25,10 +25,10 @@ public class OEmbeddedRidBagBasicTest {
       bag.convertRecords2Links();
       byte[] bytes = new byte[1024];
       UUID id = UUID.randomUUID();
-      bag.serialize(bytes, 0, id, ORidBag.Encoding.Legacy);
+      bag.serialize(bytes, 0, id, ORidBag.Encoding.Original);
 
       OEmbeddedRidBag bag1 = new OEmbeddedRidBag();
-      bag1.deserialize(bytes, 0, ORidBag.Encoding.Legacy);
+      bag1.deserialize(bytes, 0, ORidBag.Encoding.Original);
 
       assertEquals(bag.size(), 1);
 

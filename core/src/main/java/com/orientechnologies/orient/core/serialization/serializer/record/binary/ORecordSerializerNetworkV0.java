@@ -581,7 +581,7 @@ public class ORecordSerializerNetworkV0 implements ODocumentSerializer {
       pointer = writeEmbeddedMap(bytes, (Map<Object, Object>) value);
       break;
     case LINKBAG:
-      pointer = ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Legacy);
+      pointer = ((ORidBag) value).toStream(bytes, ORidBag.Encoding.Original);
       break;
     case CUSTOM:
       if (!(value instanceof OSerializableStream))
