@@ -250,8 +250,8 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
 
     boolean hasUuid = uuid != null;
 
-    final int serializedSize =
-        OByteSerializer.BYTE_SIZE + delegate.getSerializedSize(encoding) + ((hasUuid) ? OUUIDSerializer.UUID_SIZE : 0);
+    final int bagSerializedSize = delegate.getSerializedSize(encoding);
+    final int serializedSize = OByteSerializer.BYTE_SIZE + bagSerializedSize + ((hasUuid) ? OUUIDSerializer.UUID_SIZE : 0);
     int pointer = bytesContainer.alloc(serializedSize);
     int offset = pointer;
     final byte[] stream = bytesContainer.bytes;
@@ -273,7 +273,7 @@ public class ORidBag implements OStringBuilderSerializable, Iterable<OIdentifiab
       offset += OUUIDSerializer.UUID_SIZE;
     }
 
-    delegate.serialize(stream, offset, oldUuid, encoding);
+    delegate.serialize(stream, offset, oldUuid, encoding, bagSerializedSize);
     return pointer;
   }
 

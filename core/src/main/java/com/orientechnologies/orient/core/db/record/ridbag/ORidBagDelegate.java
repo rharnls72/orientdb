@@ -55,9 +55,13 @@ public interface ORidBagDelegate extends Iterable<OIdentifiable>, ORecordLazyMul
    *          in stream where start to write content
    * @param ownerUuid
    *          id of delegate owner
+   * @param encoding
+   *          the required encoding
+   * @param precomputedSize
+   *          the precomputed serialized size to avoid double calculation of it
    * @return offset where content of stream is ended
    */
-  int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding);
+  int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding, int precomputedSize);
 
   int deserialize(byte[] stream, int offset, ORidBag.Encoding encoding);
 

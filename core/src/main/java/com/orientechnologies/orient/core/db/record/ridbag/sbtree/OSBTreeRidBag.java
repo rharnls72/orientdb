@@ -816,7 +816,7 @@ public class OSBTreeRidBag implements ORidBagDelegate {
   }
 
   @Override
-  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding) {
+  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding, int precomputedSize) {
     for (Map.Entry<OIdentifiable, OModifiableInteger> entry : newEntries.entrySet()) {
       OIdentifiable identifiable = entry.getKey();
       assert identifiable instanceof ORecord;

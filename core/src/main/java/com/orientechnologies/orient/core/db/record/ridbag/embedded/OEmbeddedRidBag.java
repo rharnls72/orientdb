@@ -34,7 +34,10 @@ import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OLinkSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.binary.impl.OVarLinkSerializer;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.OVarIntSerializer;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 
 public class OEmbeddedRidBag implements ORidBagDelegate {
@@ -404,66 +407,64 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
   @Override
   public int getSerializedSize(ORidBag.Encoding encoding) {
-    int size;
+    if (!deserialized && encoding != this.encoding)
+      doDeserialization();
 
-    if (!deserialized)
-      size = serializedContent.length;
-    else
-      size = OIntegerSerializer.INT_SIZE;
-
-    size += this.size * OLinkSerializer.RID_SIZE;
-
-    return size;
+    switch (encoding) {
+    case Original:
+      return getSerializedSizeOriginal();
+    case Compact:
+      return getSerializedSizeCompact();
+    default:
+      throw new IllegalStateException("unexpected encoding");
+    }
   }
 
   @Override
   public int getSerializedSize(byte[] stream, int offset, ORidBag.Encoding encoding) {
-    return OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset) * OLinkSerializer.RID_SIZE + OIntegerSerializer.INT_SIZE;
+    switch (encoding) {
+    case Original:
+      return getSerializedSizeOriginal(stream, offset);
+    case Compact:
+      return getSerializedSizeCompact(ByteBuffer.wrap(stream, offset, stream.length - offset));
+    default:
+      throw new IllegalStateException("unexpected encoding");
+    }
   }
 
   @Override
-  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding) {
-    if (!deserialized) {
-      System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
+  public int serialize(byte[] stream, int offset, UUID ownerUuid, ORidBag.Encoding encoding, int precomputedSize) {
+    if (!deserialized && encoding != this.encoding)
+      doDeserialization();
 
-      if (contentWasChanged) {
-        OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
-        offset += serializedContent.length;
-      } else {
-        offset += serializedContent.length;
-        return offset;
-      }
-
-    } else {
-      OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
-      offset += OIntegerSerializer.INT_SIZE;
+    switch (encoding) {
+    case Original:
+      return serializeOriginal(stream, offset);
+    case Compact:
+      return serializeCompact(stream, offset, precomputedSize);
+    default:
+      throw new IllegalStateException("unexpected encoding");
     }
-
-    for (final Object entry : entries) {
-      if (entry instanceof OIdentifiable) {
-        OIdentifiable link = (OIdentifiable) entry;
-        final ORID rid = link.getIdentity();
-        if (link.getIdentity().isTemporary())
-          link = link.getRecord();
-
-        if (link == null)
-          throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
-
-        OLinkSerializer.INSTANCE.serialize(link, stream, offset);
-        offset += OLinkSerializer.RID_SIZE;
-      }
-    }
-
-    return offset;
   }
 
   @Override
   public int deserialize(final byte[] stream, final int offset, ORidBag.Encoding encoding) {
     this.encoding = encoding;
 
-    final int contentSize = getSerializedSize(stream, offset, encoding);
-
-    this.size = OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset);
+    final int contentSize;
+    switch (encoding) {
+    case Original:
+      contentSize = getSerializedSizeOriginal(stream, offset);
+      this.size = OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset);
+      break;
+    case Compact:
+      final ByteBuffer buffer = ByteBuffer.wrap(stream, offset, stream.length - offset);
+      contentSize = getSerializedSizeCompact(buffer);
+      this.size = OVarIntSerializer.readUnsignedInteger(buffer);
+      break;
+    default:
+      throw new IllegalStateException("unexpected encoding");
+    }
 
     this.serializedContent = new byte[contentSize];
     System.arraycopy(stream, offset, this.serializedContent, 0, contentSize);
@@ -532,6 +533,157 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
     if (deserialized)
       return;
 
+    switch (encoding) {
+    case Original:
+      doDeserializationOriginal();
+      break;
+    case Compact:
+      doDeserializationCompact();
+      break;
+    default:
+      throw new IllegalStateException("unexpected encoding");
+    }
+
+    deserialized = true;
+  }
+
+  @Override
+  public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
+    //do nothing not needed
+  }
+
+  private int getSerializedSizeOriginal() {
+    int size;
+
+    if (!deserialized)
+      size = serializedContent.length;
+    else
+      size = OIntegerSerializer.INT_SIZE;
+
+    size += this.size * OLinkSerializer.RID_SIZE;
+
+    return size;
+  }
+
+  private int getSerializedSizeCompact() {
+    if (deserialized) {
+      int byteSize = OVarIntSerializer.sizeOfUnsigned(size);
+
+      for (Object entry : entries) {
+        final OIdentifiable identifiable = resolveEntry(entry);
+        if (identifiable != null)
+          byteSize += OVarLinkSerializer.INSTANCE.getObjectSize(identifiable);
+      }
+
+      return byteSize + OVarIntSerializer.sizeOfUnsigned(byteSize);
+    } else {
+      if (contentWasChanged) {
+        // If it's not deserialized while the content is changed when there were only additions performed. The size may only grow.
+
+        int byteSizeDelta = 0;
+        for (Object entry : entries) {
+          final OIdentifiable identifiable = resolveEntry(entry);
+          if (identifiable != null)
+            byteSizeDelta += OVarLinkSerializer.INSTANCE.getObjectSize(identifiable);
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(serializedContent);
+        final int oldByteSize = OVarIntSerializer.readUnsignedInteger(buffer);
+        assert oldByteSize == serializedContent.length;
+        final int oldSize = OVarIntSerializer.readUnsignedInteger(buffer);
+
+        final int newByteSize = oldByteSize + byteSizeDelta;
+        final int newSize = size;
+
+        return newByteSize + (OVarIntSerializer.sizeOfUnsigned(newByteSize) - OVarIntSerializer.sizeOfUnsigned(oldByteSize)) + (
+            OVarIntSerializer.sizeOfUnsigned(newSize) - OVarIntSerializer.sizeOfUnsigned(oldSize));
+      } else
+        return serializedContent.length;
+    }
+  }
+
+  private int serializeOriginal(byte[] stream, int offset) {
+    if (!deserialized) {
+      System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
+
+      if (contentWasChanged) {
+        OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
+        offset += serializedContent.length;
+      } else {
+        offset += serializedContent.length;
+        return offset;
+      }
+    } else {
+      OIntegerSerializer.INSTANCE.serializeLiteral(size, stream, offset);
+      offset += OIntegerSerializer.INT_SIZE;
+    }
+
+    for (final Object entry : entries) {
+      final OIdentifiable identifiable = resolveEntry(entry);
+      if (identifiable != null) {
+        OLinkSerializer.INSTANCE.serialize(identifiable, stream, offset);
+        offset += OLinkSerializer.RID_SIZE;
+      }
+    }
+
+    return offset;
+  }
+
+  private int serializeCompact(byte[] stream, int offset, int precomputedSize) {
+    if (deserialized) {
+      final ByteBuffer buffer = ByteBuffer.wrap(stream, offset, stream.length - offset);
+
+      OVarIntSerializer.writeUnsigned(precomputedSize, buffer);
+      OVarIntSerializer.writeUnsigned(size, buffer);
+
+      for (final Object entry : entries) {
+        final OIdentifiable identifiable = resolveEntry(entry);
+        if (identifiable != null)
+          OVarLinkSerializer.INSTANCE.serializeInByteBufferObject(identifiable, buffer);
+      }
+
+      return offset + precomputedSize;
+    } else {
+      if (contentWasChanged) {
+        // If it's not deserialized while the content is changed when there were only additions performed. The size may only grow.
+
+        final ByteBuffer oldBuffer = ByteBuffer.wrap(serializedContent);
+        final int oldByteSize = OVarIntSerializer.readUnsignedInteger(oldBuffer);
+        assert oldByteSize == serializedContent.length;
+        final int oldSize = OVarIntSerializer.readUnsignedInteger(oldBuffer);
+
+        @SuppressWarnings("UnnecessaryLocalVariable") final int newByteSize = precomputedSize;
+        final int newSize = size;
+        final int oldDataOffset = OVarIntSerializer.sizeOfUnsigned(oldByteSize) + OVarIntSerializer.sizeOfUnsigned(oldSize);
+
+        final ByteBuffer newBuffer = ByteBuffer.wrap(stream, offset, newByteSize);
+        OVarIntSerializer.writeUnsigned(newByteSize, newBuffer);
+        OVarIntSerializer.writeUnsigned(newSize, newBuffer);
+        newBuffer.put(serializedContent, oldDataOffset, oldByteSize - oldDataOffset);
+
+        for (Object entry : entries) {
+          final OIdentifiable identifiable = resolveEntry(entry);
+          if (identifiable != null)
+            OVarLinkSerializer.INSTANCE.serializeInByteBufferObject(identifiable, newBuffer);
+        }
+
+        return offset + newByteSize;
+      } else {
+        System.arraycopy(serializedContent, 0, stream, offset, serializedContent.length);
+        return offset + serializedContent.length;
+      }
+    }
+  }
+
+  private int getSerializedSizeOriginal(byte[] stream, int offset) {
+    return OIntegerSerializer.INSTANCE.deserializeLiteral(stream, offset) * OLinkSerializer.RID_SIZE + OIntegerSerializer.INT_SIZE;
+  }
+
+  private int getSerializedSizeCompact(ByteBuffer buffer) {
+    return OVarIntSerializer.readUnsignedInteger(buffer);
+  }
+
+  private void doDeserializationOriginal() {
     int offset = 0;
     int entriesSize = OIntegerSerializer.INSTANCE.deserializeLiteral(serializedContent, offset);
     offset += OIntegerSerializer.INT_SIZE;
@@ -549,12 +701,43 @@ public class OEmbeddedRidBag implements ORidBagDelegate {
 
       addEntry(identifiable);
     }
-
-    deserialized = true;
   }
 
-  @Override
-  public void replace(OMultiValueChangeEvent<Object, Object> event, Object newValue) {
-    //do nothing not needed
+  private void doDeserializationCompact() {
+    final ByteBuffer buffer = ByteBuffer.wrap(serializedContent);
+
+    final int serializedBagSize = OVarIntSerializer.readUnsignedInteger(buffer);
+    assert serializedBagSize == serializedContent.length;
+
+    final int size = OVarIntSerializer.readUnsignedInteger(buffer);
+
+    for (int i = 0; i < size; ++i) {
+      final ORID rid = OVarLinkSerializer.INSTANCE.deserializeFromByteBufferObject(buffer);
+
+      OIdentifiable identifiable = null;
+      if (rid.isTemporary())
+        identifiable = rid.getRecord();
+
+      if (identifiable == null)
+        identifiable = rid;
+
+      addEntry(identifiable);
+    }
   }
+
+  private static OIdentifiable resolveEntry(Object entry) {
+    if (!(entry instanceof OIdentifiable))
+      return null; // tombstone or empty slot
+
+    OIdentifiable identifiable = (OIdentifiable) entry;
+    final ORID rid = identifiable.getIdentity();
+    if (identifiable.getIdentity().isTemporary())
+      identifiable = identifiable.getRecord();
+
+    if (identifiable == null)
+      throw new OSerializationException("Found null entry in ridbag with rid=" + rid);
+
+    return identifiable;
+  }
+
 }

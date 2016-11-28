@@ -1,5 +1,6 @@
 package com.orientechnologies.orient.core.ridbag;
 
+import com.orientechnologies.common.serialization.types.OUUIDSerializer;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBag;
@@ -23,9 +24,10 @@ public class OEmbeddedRidBagBasicTest {
       bag.add(new ORecordId(3, 1000));
       bag.convertLinks2Records();
       bag.convertRecords2Links();
-      byte[] bytes = new byte[1024];
+      final int bagSerializedSize = bag.getSerializedSize(ORidBag.Encoding.Original);
+      byte[] bytes = new byte[1 + bagSerializedSize + OUUIDSerializer.UUID_SIZE];
       UUID id = UUID.randomUUID();
-      bag.serialize(bytes, 0, id, ORidBag.Encoding.Original);
+      bag.serialize(bytes, 0, id, ORidBag.Encoding.Original, bagSerializedSize);
 
       OEmbeddedRidBag bag1 = new OEmbeddedRidBag();
       bag1.deserialize(bytes, 0, ORidBag.Encoding.Original);
