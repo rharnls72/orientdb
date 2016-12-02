@@ -70,7 +70,6 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializerFactory;
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializationDebug;
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializationDebugProperty;
-import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializerBinary;
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializerBinaryDebug;
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerStringAbstract;
 import com.orientechnologies.orient.core.sql.OCommandSQL;
@@ -1367,8 +1366,7 @@ public class OConsoleDatabaseApp extends OrientConsole implements OCommandOutput
       throw new OSystemException("The record has been deleted");
     if ("ORecordSerializerBinary".equals(currentDatabase.getSerializer().toString())) {
       byte[] buff = record.getBuffer();
-      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug(
-          ORecordSerializerBinary.INSTANCE.getSerializer(buff[0]));
+      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug();
       ORecordSerializationDebug deserializeDebug = debugger.deserializeDebug(buff, currentDatabase);
       message("\n\nRECORD CONTENT INFO");
       message("\n class name: %s", deserializeDebug.className);

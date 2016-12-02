@@ -55,6 +55,11 @@ public class BytesContainer {
     return this;
   }
 
+  public void append(BytesContainer toAppend) {
+    int cur = alloc(toAppend.offset);
+    System.arraycopy(toAppend.bytes, 0, bytes, cur, toAppend.offset);
+  }
+
   public byte[] fitBytes() {
     final byte[] fitted = new byte[offset];
     System.arraycopy(bytes, 0, fitted, 0, offset);

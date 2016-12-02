@@ -43,8 +43,7 @@ public class ORecordSerializerBinaryDebugTest {
 
       byte[] bytes = doc.toStream();
 
-      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug(
-          ORecordSerializerBinary.INSTANCE.getCurrentSerializer());
+      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug();
       ORecordSerializationDebug debug = debugger.deserializeDebug(bytes, db);
 
       assertEquals(debug.properties.size(), 3);
@@ -79,8 +78,7 @@ public class ORecordSerializerBinaryDebugTest {
 
       byte[] bytes = doc.toStream();
 
-      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug(
-          ORecordSerializerBinary.INSTANCE.getCurrentSerializer());
+      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug();
       ORecordSerializationDebug debug = debugger.deserializeDebug(bytes, db);
 
       assertEquals(debug.properties.size(), 3);
@@ -115,8 +113,7 @@ public class ORecordSerializerBinaryDebugTest {
       byte[] brokenBytes = new byte[bytes.length - 10];
       System.arraycopy(bytes, 0, brokenBytes, 0, bytes.length - 10);
 
-      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug(
-          ORecordSerializerBinary.INSTANCE.getCurrentSerializer());
+      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug();
       ORecordSerializationDebug debug = debugger.deserializeDebug(brokenBytes, db);
 
       assertEquals(debug.properties.size(), 3);
@@ -156,8 +153,7 @@ public class ORecordSerializerBinaryDebugTest {
       byte[] brokenBytes = new byte[bytes.length - 10];
       System.arraycopy(bytes, 0, brokenBytes, 0, bytes.length - 10);
 
-      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug(
-          ORecordSerializerBinary.INSTANCE.getCurrentSerializer());
+      ORecordSerializerBinaryDebug debugger = new ORecordSerializerBinaryDebug();
       ORecordSerializationDebug debug = debugger.deserializeDebug(brokenBytes, db);
 
       assertEquals(debug.properties.size(), 3);

@@ -187,12 +187,13 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
           final int valuePos = readInteger(bytes);
           final OType type = readOType(bytes);
 
-          if (valuePos == 0)
-            return null;
-
           if (!match)
             continue;
 
+          if (valuePos == 0)
+            return null;
+
+          
           if (!ORecordSerializerBinary.INSTANCE.getCurrentSerializer().getComparator().isBinaryComparable(type))
             return null;
 
@@ -392,7 +393,6 @@ public class ORecordSerializerBinaryV0 implements ODocumentSerializer {
     }
   }
 
-  @Override
   public Object deserializeValue(final BytesContainer bytes, final OType type, final ODocument ownerDocument) {
     Object value = null;
     switch (type) {

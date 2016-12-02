@@ -42,4 +42,22 @@ public class BytesContainerTest {
     assertEquals(bytesContainer.offset, 100);
   }
 
+  @Test
+  public void testAppend() {
+    BytesContainer bytesContainer = new BytesContainer();
+    bytesContainer.alloc(1);
+    BytesContainer bytes1 = new BytesContainer();
+    bytes1.alloc(5);
+    for (int i = 0; i < 5; i++) {
+      bytes1.bytes[i] = (byte) (i + 1);
+    }
+    bytesContainer.append(bytes1);
+    assertEquals(bytesContainer.offset, 6);
+    assertEquals(bytesContainer.bytes[1], 1);
+    assertEquals(bytesContainer.bytes[2], 2);
+    assertEquals(bytesContainer.bytes[3], 3);
+    assertEquals(bytesContainer.bytes[4], 4);
+    assertEquals(bytesContainer.bytes[5], 5);
+  }
+
 }
