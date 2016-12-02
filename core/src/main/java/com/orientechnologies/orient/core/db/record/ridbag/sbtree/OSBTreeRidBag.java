@@ -799,7 +799,6 @@ public class OSBTreeRidBag implements ORidBagDelegate {
     return reverted;
   }
 
-  @Override
   public int getSerializedSize(ORidBag.Encoding encoding) {
     int result = 2 * OLongSerializer.LONG_SIZE + 3 * OIntegerSerializer.INT_SIZE;
     if (ODatabaseRecordThreadLocal.INSTANCE.get().getStorage() instanceof OStorageProxy

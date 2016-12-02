@@ -41,8 +41,6 @@ public interface ORidBagDelegate
 
   boolean isEmpty();
 
-  int getSerializedSize(ORidBag.Encoding encoding);
-
   /**
    * Writes content of bag to stream.
    * 
